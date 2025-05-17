@@ -886,6 +886,18 @@
             this.togglePlaylistHeightBtn = document.getElementById('toggle-playlist-height-btn');
 
             this.draggedItemIndex = null; 
+            this.touchDragState = {
+                longPressTimer: null,
+                initialX: 0,
+                initialY: 0,
+                isDragActive: false,
+                draggedItem: null,
+                draggedItemIndex: -1,
+                potentialDragItem: null, // Store the item that might be dragged
+                currentTarget: null, 
+                scrollThreshold: 10, // Pixels to move before cancelling long press
+                longPressDuration: 400 // ms
+            }; 
 
             this.defaultCover = 'default.png'; 
 
@@ -1032,7 +1044,6 @@
             this.playlistEl.addEventListener('touchstart', (e) => this.handleTouchStart(e), {passive: false});
             this.playlistEl.addEventListener('touchmove', (e) => this.handleTouchMove(e), {passive: false});
             this.playlistEl.addEventListener('touchend', (e) => this.handleTouchEnd(e));
-            this.touchDragState = {}; 
         }
 
         handleDragStart(e) {
@@ -1481,60 +1492,108 @@
         handleTouchStart(e) {
             const item = e.target.closest('.playlist-item');
             if (!item || item.classList.contains('hidden-by-search')) return;
-            // e.preventDefault(); // Prevent scrolling while dragging item, if desired, but can interfere with normal scroll
-            
-            this.touchDragState.draggedItem = item;
-            this.touchDragState.draggedItemIndex = parseInt(item.dataset.index, 10);
-            this.touchDragState.initialY = e.touches[0].clientY;
-            item.classList.add('dragging');
+
+            this.clearLongPressTimer(); // Clear any existing timer
+            this.touchDragState = { // Reset parts of state, keep config
+                ...this.touchDragState,
+                isDragActive: false,
+                draggedItem: null,
+                draggedItemIndex: -1,
+                potentialDragItem: item, // Store the item that might be dragged
+                currentTarget: null
+            };
+
+            const touch = e.touches[0];
+            this.touchDragState.initialX = touch.clientX;
+            this.touchDragState.initialY = touch.clientY;
+
+            this.touchDragState.longPressTimer = setTimeout(() => {
+                if (this.touchDragState.potentialDragItem) { // Check if still relevant
+                    this.touchDragState.isDragActive = true;
+                    this.touchDragState.draggedItem = this.touchDragState.potentialDragItem;
+                    this.touchDragState.draggedItemIndex = parseInt(this.touchDragState.draggedItem.dataset.index, 10);
+                    this.touchDragState.draggedItem.classList.add('dragging');
+                    if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+                    // console.log("Long press: Drag activated for item index", this.touchDragState.draggedItemIndex);
+                }
+                this.touchDragState.longPressTimer = null; // Clear timer ID after execution or if cleared early
+            }, this.touchDragState.longPressDuration);
+        }
+
+        clearLongPressTimer() {
+            if (this.touchDragState.longPressTimer) {
+                clearTimeout(this.touchDragState.longPressTimer);
+                this.touchDragState.longPressTimer = null;
+            }
         }
 
         handleTouchMove(e) {
-            if (!this.touchDragState.draggedItem) return;
-            e.preventDefault(); // Crucial to prevent page scroll while dragging
+            if (!this.touchDragState.potentialDragItem && !this.touchDragState.isDragActive) return;
 
-            const currentY = e.touches[0].clientY;
-            // Optional: Add visual feedback for item being moved (e.g., transform translateY)
-            // this.touchDragState.draggedItem.style.transform = `translateY(${currentY - this.touchDragState.initialY}px)`;
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - this.touchDragState.initialX;
+            const deltaY = touch.clientY - this.touchDragState.initialY;
 
-            this.clearDragOverTargets();
-            const targetElement = document.elementFromPoint(e.touches[0].clientX, currentY);
-            const dropTarget = targetElement ? targetElement.closest('.playlist-item') : null;
+            if (this.touchDragState.longPressTimer) { // If timer is still running (drag not active yet)
+                if (Math.abs(deltaX) > this.touchDragState.scrollThreshold || Math.abs(deltaY) > this.touchDragState.scrollThreshold) {
+                    this.clearLongPressTimer();
+                    this.touchDragState.potentialDragItem = null; // No longer a potential drag
+                    // console.log("Scroll detected, cancelling long press");
+                    return; // Allow native scroll
+                }
+            }
 
-            if (dropTarget && dropTarget !== this.touchDragState.draggedItem && !dropTarget.classList.contains('hidden-by-search')) {
-                dropTarget.classList.add('drag-over-target');
-                this.touchDragState.currentTarget = dropTarget;
-            } else {
-                this.touchDragState.currentTarget = null;
+            if (this.touchDragState.isDragActive && this.touchDragState.draggedItem) {
+                e.preventDefault(); // Prevent page scroll WHILE DRAGGING
+
+                this.clearDragOverTargets();
+                const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
+                const dropTarget = targetElement ? targetElement.closest('.playlist-item') : null;
+
+                if (dropTarget && dropTarget !== this.touchDragState.draggedItem && !dropTarget.classList.contains('hidden-by-search')) {
+                    dropTarget.classList.add('drag-over-target');
+                    this.touchDragState.currentTarget = dropTarget;
+                } else {
+                    this.touchDragState.currentTarget = null;
+                }
             }
         }
 
         handleTouchEnd(e) {
-            if (!this.touchDragState.draggedItem) return;
+            this.clearLongPressTimer();
 
-            this.touchDragState.draggedItem.classList.remove('dragging');
-            // this.touchDragState.draggedItem.style.transform = ''; // Reset visual style
-            this.clearDragOverTargets();
+            if (this.touchDragState.isDragActive && this.touchDragState.draggedItem) {
+                this.touchDragState.draggedItem.classList.remove('dragging');
+                this.clearDragOverTargets();
 
-            if (this.touchDragState.currentTarget) {
-                const droppedOnItemIndex = parseInt(this.touchDragState.currentTarget.dataset.index, 10);
-                const draggedItemIndex = this.touchDragState.draggedItemIndex;
+                if (this.touchDragState.currentTarget) {
+                    const droppedOnItemIndex = parseInt(this.touchDragState.currentTarget.dataset.index, 10);
+                    const draggedItemIndex = this.touchDragState.draggedItemIndex;
 
-                if (draggedItemIndex !== null && draggedItemIndex !== droppedOnItemIndex) {
-                    const itemToMove = this.playlist.splice(draggedItemIndex, 1)[0];
-                    this.playlist.splice(droppedOnItemIndex, 0, itemToMove);
+                    if (draggedItemIndex !== null && draggedItemIndex !== -1 && draggedItemIndex !== droppedOnItemIndex) {
+                        const itemToMove = this.playlist.splice(draggedItemIndex, 1)[0];
+                        this.playlist.splice(droppedOnItemIndex, 0, itemToMove);
 
-                    if (draggedItemIndex < this.currentTrack && droppedOnItemIndex >= this.currentTrack) {
-                        this.currentTrack--;
-                    } else if (draggedItemIndex > this.currentTrack && droppedOnItemIndex <= this.currentTrack) {
-                        this.currentTrack++;
-                    } else if (draggedItemIndex === this.currentTrack) {
-                        this.currentTrack = droppedOnItemIndex;
+                        if (draggedItemIndex < this.currentTrack && droppedOnItemIndex >= this.currentTrack) {
+                            this.currentTrack--;
+                        } else if (draggedItemIndex > this.currentTrack && droppedOnItemIndex <= this.currentTrack) {
+                            this.currentTrack++;
+                        } else if (draggedItemIndex === this.currentTrack) {
+                            this.currentTrack = droppedOnItemIndex;
+                        }
+                        this.renderPlaylist();
+                        // console.log("Dropped item via touch");
                     }
-                    this.renderPlaylist();
                 }
             }
-            this.touchDragState = {}; // Reset state
+            
+            // Reset state, keeping config values
+            this.touchDragState = { 
+                longPressTimer: null, initialX: 0, initialY: 0, isDragActive: false, 
+                draggedItem: null, draggedItemIndex: -1, currentTarget: null, potentialDragItem: null,
+                scrollThreshold: this.touchDragState.scrollThreshold, 
+                longPressDuration: this.touchDragState.longPressDuration // Corrected typo here
+            };
         }
 
         toggleMobilePlaylistHeight() {
