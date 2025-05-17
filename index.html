@@ -1578,6 +1578,14 @@
                     this.loadTrack(this.currentTrack);
                  }
             }
+
+            // Expand playlist by default on mobile
+            if (window.matchMedia("(max-width: 768px)").matches) {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar && !sidebar.classList.contains('sidebar-mobile-expanded') && this.togglePlaylistHeightBtn) {
+                    this.toggleMobilePlaylistHeight();
+                }
+            }
         }
 
         initAudioContext() {
@@ -2034,34 +2042,57 @@
             const searchTerm = this.playlistSearchEl.value.toLowerCase().trim();
             const items = this.playlistEl.querySelectorAll('.playlist-item');
             const groupHeaders = this.playlistEl.querySelectorAll('.playlist-group-header');
-            let visibleGroups = new Set();
-
+            
             items.forEach(item => {
                 const title = item.querySelector('.playlist-item-title')?.textContent.toLowerCase() || '';
                 const artist = item.querySelector('.playlist-item-artist')?.textContent.toLowerCase() || '';
-                // Potentially add album or other data attributes if you want to search them too
-                // const trackData = this.playlist[parseInt(item.dataset.index)]; // Get full track data if needed
-                
                 const isVisible = title.includes(searchTerm) || artist.includes(searchTerm);
                 item.classList.toggle('hidden-by-search', !isVisible);
+            });
 
-                if (isVisible) {
-                    // Find the group header for this item and mark it as visible
-                    let currentElement = item.previousElementSibling;
-                    while (currentElement) {
-                        if (currentElement.classList.contains('playlist-group-header')) {
-                            visibleGroups.add(currentElement);
-                            break;
+            // Auto-expand groups if a searched item is inside a collapsed group
+            if (searchTerm !== '') {
+                items.forEach(item => {
+                    if (!item.classList.contains('hidden-by-search')) {
+                        const groupItemsContainer = item.parentElement;
+                        if (groupItemsContainer && groupItemsContainer.classList.contains('playlist-group-items')) {
+                            const header = groupItemsContainer.previousElementSibling;
+                            if (header && header.classList.contains('playlist-group-header')) {
+                                const groupName = header.dataset.groupName;
+                                // Check both visual class and internal state before toggling
+                                if (header.classList.contains('collapsed') && this.collapsibleGroupStates[groupName]) {
+                                    this.toggleGroupCollapse(groupName, header); // Expand it
+                                }
+                            }
                         }
-                        currentElement = currentElement.previousElementSibling;
                     }
-                }
-            });
+                });
+            }
 
-            groupHeaders.forEach(header => {
-                header.classList.toggle('hidden-by-search', !visibleGroups.has(header));
-            });
-             // If no items are visible at all, you could show a "No results" message in playlistEl
+            if (searchTerm === '') {
+                // If search is cleared, show all group headers
+                groupHeaders.forEach(header => {
+                    header.classList.remove('hidden-by-search');
+                });
+            } else {
+                // If there is a search term, determine which groups should be visible
+                let visibleGroups = new Set();
+                items.forEach(item => {
+                    if (!item.classList.contains('hidden-by-search')) {
+                        // Find the group header for this visible item
+                        let currentElement = item.parentElement; // Start from parent (playlist-group-items)
+                        if (currentElement && currentElement.classList.contains('playlist-group-items')){
+                           currentElement = currentElement.previousElementSibling;
+                           if (currentElement && currentElement.classList.contains('playlist-group-header')) {
+                                visibleGroups.add(currentElement);
+                           }
+                        }
+                    }
+                });
+                groupHeaders.forEach(header => {
+                    header.classList.toggle('hidden-by-search', !visibleGroups.has(header));
+                });
+            }
         }
 
         truncateText(text, maxLength = null) { 
