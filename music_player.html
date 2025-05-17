@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleek Music Player</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #f8f8f8;
+            --primary-elements: #ffffff;
+            --secondary-elements: #e8e8e8;
+            --text-color: #333333;
+            --text-muted: #777777;
+            --accent-color: #007aff; /* Apple Blue */
+            --hover-accent: #005ecb;
+            --button-text: #333333;
+            --border-main: #d1d1d1;
+            --border-light: #e0e0e0; /* Lighter border for subtle separation */
+            --border-radius-main: 8px;
+            --border-radius-small: 6px;
+            --player-bar-bg: rgba(240, 240, 240, 0.85); /* Slightly transparent for player bar */
+            --sidebar-bg: #f0f0f0;
+            --selected-item-bg: rgba(0, 122, 255, 0.1);
+            --selected-item-text: #007aff;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --sidebar-width: 280px;
+            --player-bar-height: 90px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Apple-like font stack */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex; /* Use flex for app-container to fill height */
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #app-container {
+            display: grid;
+            grid-template-columns: var(--sidebar-width) 1fr; /* Sidebar and Main Content */
+            grid-template-rows: 1fr var(--player-bar-height); /* Main Area and Player Bar */
+            width: 100%;
+            height: 100%;
+        }
+
+        #sidebar {
+            grid-row: 1 / 2; /* Span the first row (main area row) */
+            grid-column: 1 / 2;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-main);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0; /* Padding top/bottom, side padding handled by inner elements */
+            overflow-y: auto;
+            transition: max-height 0.3s ease-in-out; /* Animate max-height change */
+        }
+
+        #sidebar.sidebar-mobile-expanded {
+            max-height: 75vh; /* Expanded height */
+        }
+
+        .logo-container {
+            padding: 0 20px 20px 20px;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: 15px;
+        }
+
+        .logo {
+            font-size: 1.5rem; /* Slightly smaller */
+            font-weight: 600; /* Apple uses bolder weight */
+            color: var(--text-color); /* Standard text color for logo */
+            margin-bottom: 15px;
+        }
+
+        #load-folder {
+            background: var(--accent-color);
+            border: none;
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: var(--border-radius-small);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            font-size: 0.9rem;
+            text-align: center;
+            width: 100%; /* Full width */
+        }
+
+        #load-folder:hover {
+            background-color: var(--hover-accent);
+        }
+
+
+        #main-content {
+            grid-row: 1 / 2;
+            grid-column: 2 / 3;
+            background-color: var(--bg-color);
+            overflow: hidden; /* Visualizer will be direct child */
+            display: flex; /* To make visualizer take full space */
+        }
+
+        #visualizer-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #player-bar {
+            grid-row: 2 / 3; /* Second row */
+            grid-column: 1 / 3; /* Span both columns */
+            background-color: var(--player-bar-bg);
+            backdrop-filter: blur(10px); /* Frosted glass effect */
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border-main);
+            display: grid; /* Use grid for internal layout */
+            grid-template-columns: 1fr 2fr 1fr; /* Song Info | Controls/Progress | Volume */
+            align-items: center;
+            padding: 0 25px;
+            height: var(--player-bar-height);
+        }
+        
+        .player-song-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .album-cover img {
+            width: 50px; /* Smaller album art for player bar */
+            height: 50px;
+            border-radius: var(--border-radius-small);
+            margin-right: 15px;
+            box-shadow: 0 2px 5px var(--shadow-color);
+        }
+
+        .song-details {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Prevent long titles from breaking layout */
+        }
+
+        .song-title {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .artist-name {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .player-controls-progress {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; /* Center controls and progress vertically */
+            width: 100%;
+            max-width: 500px; /* Max width for controls/progress area */
+            margin: 0 auto; /* Center this block */
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 8px; /* Space between controls and progress bar */
+        }
+
+        .control-btn {
+            font-size: 1.3rem; 
+            background: none;
+            border: none;
+            color: var(--button-text);
+            cursor: pointer;
+            margin: 0 12px; 
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            color: var(--accent-color);
+            background-color: transparent; /* No background on hover for these */
+        }
+        
+        #loop-btn.active,
+        #shuffle-btn.active {
+            color: var(--accent-color);
+        }
+
+        .play-pause {
+            font-size: 1.8rem; 
+            background: none; /* Transparent background */
+            border: 2px solid var(--button-text); /* Border instead of background */
+            color: var(--button-text);
+            cursor: pointer;
+            width: 44px; 
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.2s ease;
+            margin: 0 10px; /* Give it some space */
+        }
+
+        .play-pause:hover {
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .progress-container {
+            display: flex;
+            align-items: center;
+            width: 100%; /* Full width within its parent */
+            position: relative; /* For positioning next song display */
+        }
+
+        .time {
+            font-size: 0.75rem;
+            width: 40px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .progress-bar-container {
+            flex-grow: 1;
+            height: 4px; /* Slimmer progress bar */
+            background-color: var(--secondary-elements);
+            margin: 0 10px;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--accent-color);
+            width: 0%;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+
+        .player-volume-controls {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end; /* Align to the right */
+        }
+
+        #volume-btn {
+            font-size: 1.2rem; /* Smaller volume icon */
+            /* Other styles inherited from .control-btn */
+            margin-right: 8px;
+        }
+
+        .volume-bar-container {
+            width: 100px; 
+            height: 4px; /* Match progress bar height */
+            background-color: var(--secondary-elements);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .volume-bar {
+            height: 100%;
+            width: 70%;
+            background-color: var(--accent-color);
+            border-radius: 2px;
+        }
+
+        /* Playlist Styles (within sidebar) */
+        .playlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            /* border-bottom: 1px solid var(--border-light); */ /* Removed, spacing is enough */
+        }
+
+        .playlist-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .playlist {
+            overflow-y: auto;
+            flex-grow: 1; /* Takes remaining space in sidebar */
+        }
+
+        .playlist-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: background-color 0.15s ease, color 0.15s ease;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .playlist-item:last-child {
+            border-bottom: none;
+        }
+
+        .playlist-item:hover {
+            background-color: var(--secondary-elements);
+        }
+
+        .playlist-item.active {
+            background-color: var(--selected-item-bg);
+            color: var(--selected-item-text);
+        }
+        
+        .playlist-item.active .playlist-item-title {
+             color: var(--selected-item-text);
+        }
+
+        .playlist-item.active .playlist-item-artist,
+        .playlist-item.active .playlist-item-number {
+            color: var(--selected-item-text);
+            opacity: 0.7; /* Mute them slightly in active state */
+        }
+
+        .playlist-item-number {
+            margin-right: 10px; /* Adjusted from 12px to make space for cover */
+            width: 20px;
+            text-align: right;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+
+        .playlist-item-details {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* For text-overflow */
+        }
+
+        .playlist-item-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-color); /* Default color */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .playlist-item-artist {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* New styles for album art in playlist */
+        .playlist-item-cover {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--border-radius-small);
+            margin-right: 10px;
+            object-fit: cover; /* Ensure image covers the area, might crop */
+            flex-shrink: 0;
+        }
+
+        .playlist-group-header {
+            padding: 12px 20px 8px 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background-color: var(--sidebar-bg); /* Match sidebar */
+            border-bottom: 1px solid var(--border-light);
+            position: sticky;
+            top: -1px; /* Small offset to ensure border is visible under it */
+            z-index: 1; 
+        }
+
+        /* Theme Toggle Button - Reposition and Restyle for new layout */
+        /* This will be overridden by JS, but good to have base style */
+         #theme-toggle-btn { /* Assuming JS will set this ID or class */
+            position: fixed;
+            bottom: calc(var(--player-bar-height) + 20px); /* Above player bar */
+            right: 20px;
+            padding: 8px;
+            font-size: 1.3rem;
+            background-color: var(--primary-elements);
+            color: var(--text-color);
+            border: 1px solid var(--border-main);
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Style for next song display */
+        /* #next-song-info {
+            position: absolute;
+            bottom: -18px; 
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            background-color: var(--player-bar-bg); 
+            padding: 2px 8px;
+            border-radius: var(--border-radius-small);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80%; 
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #next-song-info.visible {
+            opacity: 1;
+        } */
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) { /* Tablet and larger mobile */
+            #app-container {
+                grid-template-columns: 1fr; 
+                grid-template-rows: auto 1fr var(--player-bar-height); 
+            }
+            #sidebar {
+                grid-row: 1 / 2; /* Restore to grid flow */
+                grid-column: 1 / 2; /* Restore to grid flow */
+                width: 100%; /* Was var(--sidebar-width) with fixed, now 100% for stacked */
+                height: auto; /* Restore auto height */
+                max-height: 40vh; /* Restore max-height for stacked layout */
+                border-right: none; /* Revert from fixed version */
+                border-bottom: 1px solid var(--border-main); /* Restore bottom border for stacked */
+                overflow-y: auto; 
+                display: flex; 
+                flex-direction: column;
+            }
+            .logo-container{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding-bottom: 15px;
+            }
+            .logo{ margin-bottom: 0;}
+            #load-folder { width: auto; padding: 8px 12px;}
+
+            #main-content {
+                grid-row: 2 / 3;
+                grid-column: 1 / 2;
+            }
+            #player-bar {
+                grid-row: 3 / 4;
+                grid-column: 1 / 2;
+                grid-template-columns: auto 1fr; /* Song Info | Controls/Progress -- Volume removed by default here */
+                padding: 0 10px; /* Reduced padding */
+                column-gap: 10px; /* Add some gap between song info and controls */
+            }
+            .player-song-info .song-details {
+                 max-width: 100px; /* Further limit width on smaller screens */
+                 font-size: 0.9em; /* Slightly smaller font for song details */
+            }
+            .player-song-info .album-cover img {
+                width: 40px; /* Smaller album art */
+                height: 40px;
+                margin-right: 10px;
+            }
+            .player-controls-progress {
+                padding: 0 5px; /* Reduce padding further */
+            }
+             .controls .control-btn { 
+                margin: 0 5px; /* Reduced margin for control buttons */
+                font-size: 1.1rem; /* Smaller control buttons */
+                padding: 6px;
+            }
+             .play-pause { 
+                width: 38px; 
+                height: 38px; 
+                font-size: 1.4rem; 
+                border-width: 1.5px; /* Thinner border */
+            }
+
+            .player-volume-controls { display: none; } 
+        }
+
+        @media (max-width: 480px) { /* Small mobile screens */
+            :root {
+                --sidebar-width: 100%; 
+                --player-bar-height: auto; /* Allow player bar to grow if needed */
+            }
+             #sidebar {
+                padding-top: 10px; /* Reduced padding */
+                max-height: 35vh; /* Initial max-height for smallest screens */
+            }
+            #sidebar.sidebar-mobile-expanded {
+                max-height: 70vh; /* Expanded height for smallest screens */
+            }
+            .logo-container { padding: 0 10px 10px 10px;}
+            #load-folder { font-size: 0.85rem; padding: 6px 10px;}
+            .playlist-header { padding: 8px 10px; }
+            .playlist-item { padding: 6px 10px; }
+            .playlist-item-title { font-size: 0.8rem; }
+            .playlist-item-artist { font-size: 0.65rem; }
+            .playlist-item-cover { width: 24px; height: 24px; margin-right: 6px;}
+            .playlist-item-number { font-size: 0.75rem; margin-right: 6px; }
+
+            #player-bar {
+                grid-template-columns: 1fr; 
+                grid-template-rows: auto auto; 
+                height: auto; 
+                padding: 8px 10px; /* Reduced padding */
+                row-gap: 8px;
+            }
+            .player-song-info {
+                grid-row: 1 / 2;
+                grid-column: 1/2;
+                justify-content: flex-start; /* Align to start */
+                text-align: left;
+            }
+             .player-song-info .album-cover img { 
+                width: 36px; 
+                height: 36px;
+                margin-right: 8px;
+            }
+             .player-song-info .song-details { 
+                max-width: calc(100% - 44px); /* Adjust based on album art size + margin */
+                align-items: flex-start;
+                font-size: 0.85em;
+            }
+            .player-song-info .song-title,
+            .player-song-info .artist-name {
+                 white-space: nowrap; /* Ensure they stay on one line */
+                 overflow: hidden;
+                 text-overflow: ellipsis;
+            }
+
+            .player-controls-progress {
+                grid-row: 2/3;
+                grid-column: 1/2;
+                width: 100%;
+            }
+            .controls { 
+                margin-bottom: 8px;
+                justify-content: space-around; /* Distribute controls more evenly */
+            }
+            .controls .control-btn {
+                margin: 0 3px; /* Minimal margin */
+                font-size: 1rem; /* Even smaller icons */
+                padding: 5px;
+            }
+            .play-pause {
+                width: 34px;
+                height: 34px;
+                font-size: 1.2rem;
+            }
+            .progress-container { width: 100%;}
+            .time { font-size: 0.7rem; width: 35px;}
+            
+            #theme-toggle-btn {
+                bottom: 15px; /* Adjust for potentially taller auto player bar */
+                right: 15px;
+                width: 38px; /* Slightly larger for easier tapping */
+                height: 38px;
+                font-size: 1.2rem;
+            }
+        }
+
+        /* Custom Scrollbar Styles */
+        /* Works in Webkit-based browsers (Chrome, Safari, Edge), Firefox uses different properties (scrollbar-width, scrollbar-color) */
+        ::-webkit-scrollbar {
+            width: 8px; /* Width of the entire scrollbar */
+            height: 8px; /* Height for horizontal scrollbar (if any) */
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--secondary-elements); /* Track color, slightly darker than sidebar */
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: var(--text-muted); /* Thumb color */
+            border-radius: 10px;
+            border: 2px solid var(--secondary-elements); /* Creates padding around thumb */
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--accent-color); /* Thumb color on hover */
+        }
+
+        /* For Firefox */
+        * {
+            scrollbar-width: thin; /* "auto" or "thin" */
+            scrollbar-color: var(--text-muted) var(--secondary-elements); /* thumb and track color */
+        }
+
+        /* Drag and Drop Playlist Styles */
+        .playlist-item.dragging {
+            opacity: 0.5;
+            background-color: var(--secondary-elements);
+        }
+
+        .playlist-item.drag-over-target {
+            border-top: 2px solid var(--accent-color); /* Highlight where it will be inserted */
+        }
+
+        /* Search Bar Styles */
+        .playlist-search-container {
+            padding: 0 20px 15px 20px;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: 10px;
+            display: flex; /* For aligning search and toggle button */
+            align-items: center;
+        }
+
+        #playlist-search {
+            width: 100%; /* Default, will be overridden by flex-grow */
+            flex-grow: 1; /* Take available space */
+            padding: 10px;
+            border-radius: var(--border-radius-small);
+            border: 1px solid var(--border-main);
+            background-color: var(--primary-elements);
+            color: var(--text-color);
+            font-size: 0.9rem;
+        }
+
+        #playlist-search::placeholder {
+            color: var(--text-muted);
+        }
+
+        .playlist-item.hidden-by-search {
+            display: none;
+        }
+
+        .playlist-group-header.hidden-by-search {
+            display: none;
+        }
+
+        /* Playlist Height Toggle Button (Mobile) */
+        #toggle-playlist-height-btn {
+            display: inline-flex; /* Changed from block to inline-flex for better alignment */
+            align-items: center; /* Align icon and text */
+            white-space: nowrap; /* Prevent text wrapping */
+            margin-left: 10px; /* Space from search bar */
+            padding: 8px 10px; /* Adjusted padding */
+            background-color: var(--secondary-elements);
+            color: var(--text-muted);
+            border: 1px solid var(--border-main);
+            border-radius: var(--border-radius-small);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        #toggle-playlist-height-btn:hover {
+            background-color: var(--accent-color);
+            color: var(--primary-elements);
+            border-color: var(--accent-color);
+        }
+
+        /* Overlay for when sidebar is open on mobile - REMOVING */
+        /* #main-content-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 99; 
+        }
+        #main-content-overlay.active {
+            display: block;
+        } */
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="sidebar">
+            <div class="logo-container">
+        <div class="logo">Sleek Music Player</div>
+        <button id="load-folder">Load Folder</button>
+    </div>
+            <div class="playlist-search-container"> 
+                <input type="search" id="playlist-search" placeholder="Search in playlist...">
+                <button id="toggle-playlist-height-btn">More <i class="fas fa-chevron-down"></i></button>
+            </div>
+        <div class="playlist-header">
+            <div class="playlist-title">My Music</div>
+        </div>
+        <div class="playlist" id="playlist"></div>
+    </div>
+
+        <div id="main-content">
+            <!-- <button id="hamburger-menu"><i class="fas fa-bars"></i></button> REMOVING Hamburger Menu Button -->
+            <div id="visualizer-container"></div> 
+        </div>
+        <!-- <div id="main-content-overlay"></div> REMOVING Overlay -->
+
+        <div id="player-bar">
+            <div class="player-song-info">
+            <div class="album-cover"><img id="album-art" src="default.png" alt="Album Cover"></div>
+            <div class="song-details">
+                <div class="song-title" id="song-title">Not Playing</div>
+                <div class="artist-name" id="artist-name">Select a song</div>
+            </div>
+        </div>
+
+            <div class="player-controls-progress">
+        <div class="controls">
+            <button class="control-btn" id="prev-btn"><i class="fas fa-backward-step"></i></button>
+            <div class="play-pause" id="play-pause-btn"><i class="fas fa-play"></i></div>
+            <button class="control-btn" id="next-btn"><i class="fas fa-forward-step"></i></button>
+            <button class="control-btn" id="shuffle-btn"><i class="fas fa-shuffle"></i></button>
+            <button class="control-btn" id="loop-btn"><i class="fas fa-repeat"></i></button>
+        </div>
+        <div class="progress-container" id="progress-container">
+            <div class="time" id="current-time">0:00</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="time" id="duration">0:00</div>
+            <!-- <div id="next-song-info"></div> REMOVING THIS --> 
+        </div>
+            </div>
+
+            <div class="player-volume-controls">
+            <button id="volume-btn" class="control-btn"><i class="fas fa-volume-high"></i></button>
+                <div class="volume-bar-container" id="volume-bar-container">
+                <div class="volume-bar" id="volume-bar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="folderPicker" webkitdirectory multiple style="display:none" accept="audio/*,video/*">
+
+    <div class="playlist-container" id="playlist-container" style="display: none;">
+    </div>
+
+    <div id="player-container" style="display: none;">
+    </div>
+
+    <script>
+    // ... IndexedDB Helper Functions (can be outside the class or static members of a utility class)
+    let dbPromise = null;
+
+    function openMusicDB() {
+        if (dbPromise) return dbPromise;
+
+        dbPromise = new Promise((resolve, reject) => {
+            const request = indexedDB.open('MusicPlayerDB', 2); // Version 2 for potential 'order' field later
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('playlistStore')) {
+                    const store = db.createObjectStore('playlistStore', { keyPath: 'id', autoIncrement: true });
+                    // store.createIndex('order', 'order', { unique: false }); // For future order persistence
+                }
+                // Example for upgrading to add 'order' index if version was 1 before
+                // if (event.oldVersion < 2) { 
+                //     const store = request.transaction.objectStore('playlistStore');
+                //     if (!store.indexNames.contains('order')) {
+                //         store.createIndex('order', 'order', { unique: false });
+                //     }
+                // }
+            };
+
+            request.onsuccess = (event) => {
+                resolve(event.target.result);
+            };
+
+            request.onerror = (event) => {
+                console.error("IndexedDB error:", event.target.errorCode);
+                reject(event.target.error);
+            };
+        });
+        return dbPromise;
+    }
+
+    async function saveTrackToDB(trackData) {
+        try {
+            const db = await openMusicDB();
+            const transaction = db.transaction('playlistStore', 'readwrite');
+            const store = transaction.objectStore('playlistStore');
+            return new Promise((resolve, reject) => {
+                const request = store.add(trackData); // trackData should include fileBlob and coverBlob
+                request.onsuccess = () => resolve(request.result); // Returns the key of the new record
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error("Error saving track to DB:", error);
+            return Promise.reject(error);
+        }
+    }
+
+    async function getPlaylistFromDB() {
+        try {
+            const db = await openMusicDB();
+            const transaction = db.transaction('playlistStore', 'readonly');
+            const store = transaction.objectStore('playlistStore');
+            return new Promise((resolve, reject) => {
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result); // Returns array of all objects
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error("Error getting playlist from DB:", error);
+            return Promise.reject(error);
+        }
+    }
+
+    async function clearPlaylistFromDB() {
+        try {
+            const db = await openMusicDB();
+            const transaction = db.transaction('playlistStore', 'readwrite');
+            const store = transaction.objectStore('playlistStore');
+            return new Promise((resolve, reject) => {
+                const request = store.clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error("Error clearing playlist from DB:", error);
+            return Promise.reject(error);
+        }
+    }
+
+    class MusicPlayer {
+        constructor() {
+            this.audioContext = null;
+            this.analyser = null;
+            this.gainNode = null;
+            this.audioSource = null;
+            this.audio = new Audio();
+            this.isPlaying = false;
+            this.currentTrack = 0;
+            this.volume = 0.7;
+            this.isLooping = false;
+            this.restartedTrack = false;
+            this.isShuffling = false;
+            this.playHistory = [];
+            this.mediaSessionActionsSetup = false; // For Media Session API
+            this.playbackRestored = false; // Flag to indicate if state was restored
+
+            // DOM
+            this.playPauseBtn = document.getElementById('play-pause-btn');
+            this.prevBtn = document.getElementById('prev-btn');
+            this.nextBtn = document.getElementById('next-btn');
+            this.shuffleBtn = document.getElementById('shuffle-btn');
+            this.loopBtn = document.getElementById('loop-btn');
+            this.progressContainer = document.getElementById('progress-container');
+            this.progressBar = document.getElementById('progress-bar');
+            this.currentTimeEl = document.getElementById('current-time');
+            this.durationEl = document.getElementById('duration');
+            this.volumeBtn = document.getElementById('volume-btn');
+            this.volumeBarContainer = document.getElementById('volume-bar-container');
+            this.volumeBar = document.getElementById('volume-bar');
+            this.songTitleEl = document.getElementById('song-title');
+            this.artistNameEl = document.getElementById('artist-name');
+            this.albumArtEl = document.getElementById('album-art');
+            this.playlistBtn = document.getElementById('playlist-btn');
+            this.closePlaylistBtn = document.getElementById('close-playlist');
+            this.playlistContainer = document.getElementById('sidebar');
+            this.playlistEl = document.getElementById('playlist');
+            this.playlistSearchEl = document.getElementById('playlist-search');
+            this.togglePlaylistHeightBtn = document.getElementById('toggle-playlist-height-btn');
+
+            this.draggedItemIndex = null; 
+
+            this.defaultCover = 'default.png'; 
+
+            // Start
+            this.init();
+        }
+
+        async init() { // Make init async
+            this.initAudioContext();
+            this.setupEventListeners();
+            
+            try {
+                await openMusicDB(); // Ensure DB is open/ready
+                const storedPlaylist = await getPlaylistFromDB();
+                if (storedPlaylist && storedPlaylist.length > 0) {
+                    console.log("Loading playlist from IndexedDB");
+                    this.playlist = storedPlaylist.map(track => ({
+                        ...track,
+                        file: URL.createObjectURL(track.fileBlob), 
+                        cover: track.coverBlob ? URL.createObjectURL(track.coverBlob) : this.defaultCover
+                    }));
+                    this.renderPlaylist(); // Render first, then attempt to restore state
+
+                    const savedStateString = localStorage.getItem('musicPlayerState');
+                    if (savedStateString) {
+                        const savedState = JSON.parse(savedStateString);
+                        if (savedState && typeof savedState.currentTrack === 'number' && 
+                            savedState.currentTrack >= 0 && savedState.currentTrack < this.playlist.length) {
+                            
+                            console.log("Restoring playback state:", savedState);
+                            this.currentTrack = savedState.currentTrack;
+                            
+                            this.volume = savedState.volume !== undefined ? savedState.volume : 0.7;
+                            if (this.gainNode) this.gainNode.gain.value = this.volume;
+                            this.volumeBar.style.width = `${this.volume * 100}%`;
+                            this.updateVolumeIcon();
+                            
+                            this.isLooping = savedState.isLooping || false;
+                            this.audio.loop = this.isLooping;
+                            this.loopBtn.classList.toggle('active', this.isLooping);
+                            
+                            this.isShuffling = savedState.isShuffling || false;
+                            this.shuffleBtn.classList.toggle('active', this.isShuffling);
+                            
+                            this.isPlaying = savedState.isPlaying || false; // Restore isPlaying state
+                            
+                            this.loadTrack(this.currentTrack, savedState.currentTime);
+                            this.playbackRestored = true;
+                        } else if (this.playlist.length > 0) {
+                            this.loadTrack(0); // Load first if saved state is invalid
+                        }
+                    } else if (this.playlist.length > 0) {
+                        this.loadTrack(0); // Default: load first track if no saved state
+                    }
+                } else {
+                    console.log("No playlist in IndexedDB or DB empty.");
+            this.playlist = [];
+                    this.renderPlaylist(); 
+                }
+            } catch (error) {
+                console.error("Failed to initialize playlist from IndexedDB:", error);
+                this.playlist = [];
+                this.renderPlaylist(); 
+            }
+            if (!this.playbackRestored && this.playlist.length > 0 && this.currentTrack < this.playlist.length) {
+                 // If not restored and playlist exists, ensure first track UI is shown (or currentTrack if somehow set)
+                 // This addresses cases where DB is empty, then user loads folder, then refreshes.
+                 // If loadTrack wasn't called above due to empty DB then no restored state.
+                 if (!this.audio.src && this.playlist[this.currentTrack]) { // only if no track is loaded yet
+                    this.loadTrack(this.currentTrack);
+                 }
+            }
+        }
+
+        initAudioContext() {
+            this.audioContext = new (window.AudioContext||window.webkitAudioContext)();
+            this.analyser = this.audioContext.createAnalyser();
+            this.gainNode = this.audioContext.createGain();
+            this.analyser.fftSize = 2048;
+            this.analyser.smoothingTimeConstant = 0.8;
+            this.gainNode.gain.value = this.volume;
+            this.gainNode.connect(this.audioContext.destination);
+            this.analyser.connect(this.gainNode);
+        }
+
+        setupEventListeners() {
+            // folder load
+            document.getElementById('load-folder').addEventListener('click', () => {
+                document.getElementById('folderPicker').click();
+            });
+            document.getElementById('folderPicker').addEventListener('change', e => {
+                this.loadFolder(e.target.files);
+            });
+
+            // playback controls
+            this.playPauseBtn.addEventListener('click', ()=>this.togglePlay());
+            this.prevBtn.addEventListener('click', ()=>this.prevTrack());
+            this.nextBtn.addEventListener('click', ()=>this.nextTrack());
+            this.progressContainer.addEventListener('click', e=>{
+                const rect = this.progressContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const width = rect.width;
+                if(this.audio.duration && width > 0) this.audio.currentTime = (clickX/width)*this.audio.duration;
+            });
+            this.volumeBarContainer.addEventListener('click', e=>{
+                const rect = this.volumeBarContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                if (rect.width > 0) {
+                    this.volume = Math.max(0, Math.min(1, clickX / rect.width));
+                    this.volumeBar.style.width = `${this.volume * 100}%`;
+                    if (this.gainNode) this.gainNode.gain.value = this.volume;
+                this.updateVolumeIcon();
+                    this.savePlaybackState(); // Save state on volume change
+                }
+            });
+            this.volumeBtn.addEventListener('click', ()=>{
+                if(this.volume>0){ this.lastVolume=this.volume; this.volume=0; }
+                else this.volume=this.lastVolume||0.7;
+                this.volumeBar.style.width=`${this.volume*100}%`;
+                if(this.gainNode) this.gainNode.gain.value = this.volume;
+                this.updateVolumeIcon();
+                this.savePlaybackState(); // Save state on volume mute/unmute
+            });
+            this.loopBtn.addEventListener('click', ()=> { this.toggleLoop(); this.savePlaybackState(); });
+            this.shuffleBtn.addEventListener('click', ()=> { this.toggleShuffle(); this.savePlaybackState(); });
+            this.audio.addEventListener('timeupdate', ()=> { this.updateProgress(); this.savePlaybackState(); }); // Save state on time update
+            this.audio.addEventListener('ended', ()=>this.handleTrackEnd());
+
+            window.addEventListener('beforeunload', () => this.savePlaybackState()); // Save state before leaving page
+
+            this.playlistEl.addEventListener('dragstart', (e) => this.handleDragStart(e));
+            this.playlistEl.addEventListener('dragover', (e) => this.handleDragOver(e));
+            this.playlistEl.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            this.playlistEl.addEventListener('drop', (e) => this.handleDrop(e));
+            this.playlistEl.addEventListener('dragend', (e) => this.handleDragEnd(e));
+
+            this.playlistSearchEl.addEventListener('input', () => this.filterPlaylist());
+            
+            if (this.togglePlaylistHeightBtn) {
+                this.togglePlaylistHeightBtn.addEventListener('click', () => this.toggleMobilePlaylistHeight());
+            }
+
+            // Touch events for mobile drag-drop
+            this.playlistEl.addEventListener('touchstart', (e) => this.handleTouchStart(e), {passive: false});
+            this.playlistEl.addEventListener('touchmove', (e) => this.handleTouchMove(e), {passive: false});
+            this.playlistEl.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+            this.touchDragState = {}; 
+        }
+
+        handleDragStart(e) {
+            const item = e.target.closest('.playlist-item');
+            if (!item || item.classList.contains('hidden-by-search')) return; // Don't drag hidden items
+            this.draggedItemIndex = parseInt(item.dataset.index, 10);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.draggedItemIndex); // Necessary for Firefox
+            item.classList.add('dragging');
+        }
+
+        handleDragOver(e) {
+            e.preventDefault(); 
+            const item = e.target.closest('.playlist-item');
+            if (!item || item.classList.contains('hidden-by-search') || parseInt(item.dataset.index, 10) === this.draggedItemIndex) {
+                 this.clearDragOverTargets();
+                return;
+            }
+            e.dataTransfer.dropEffect = 'move';
+            this.clearDragOverTargets(); // Clear from other items
+            item.classList.add('drag-over-target');
+        }
+
+        handleDragLeave(e) {
+            const item = e.target.closest('.playlist-item');
+            if (item) {
+                item.classList.remove('drag-over-target');
+            }
+        }
+        
+        clearDragOverTargets(){
+            this.playlistEl.querySelectorAll('.drag-over-target').forEach(el => el.classList.remove('drag-over-target'));
+        }
+
+        handleDrop(e) {
+            e.preventDefault();
+            this.clearDragOverTargets();
+            const targetItem = e.target.closest('.playlist-item');
+            if (!targetItem || targetItem.classList.contains('hidden-by-search') || this.draggedItemIndex === null) return;
+
+            const droppedOnItemIndex = parseInt(targetItem.dataset.index, 10);
+
+            if (this.draggedItemIndex === droppedOnItemIndex) return; // Dropped on itself
+
+            // Perform reorder
+            const itemToMove = this.playlist.splice(this.draggedItemIndex, 1)[0];
+            this.playlist.splice(droppedOnItemIndex, 0, itemToMove);
+
+            // Update currentTrack index if it's affected by the move
+            if (this.draggedItemIndex < this.currentTrack && droppedOnItemIndex >= this.currentTrack) {
+                this.currentTrack--;
+            } else if (this.draggedItemIndex > this.currentTrack && droppedOnItemIndex <= this.currentTrack) {
+                this.currentTrack++;
+            } else if (this.draggedItemIndex === this.currentTrack) {
+                this.currentTrack = droppedOnItemIndex;
+            }
+            
+            this.draggedItemIndex = null; // Reset
+            this.renderPlaylist(); // Re-render with new order and correct indices
+        }
+
+        handleDragEnd(e) {
+            const item = e.target.closest('.playlist-item');
+            if(item) item.classList.remove('dragging');
+            this.clearDragOverTargets();
+            this.draggedItemIndex = null;
+        }
+
+        filterPlaylist() {
+            const searchTerm = this.playlistSearchEl.value.toLowerCase().trim();
+            const items = this.playlistEl.querySelectorAll('.playlist-item');
+            const groupHeaders = this.playlistEl.querySelectorAll('.playlist-group-header');
+            let visibleGroups = new Set();
+
+            items.forEach(item => {
+                const title = item.querySelector('.playlist-item-title')?.textContent.toLowerCase() || '';
+                const artist = item.querySelector('.playlist-item-artist')?.textContent.toLowerCase() || '';
+                // Potentially add album or other data attributes if you want to search them too
+                // const trackData = this.playlist[parseInt(item.dataset.index)]; // Get full track data if needed
+                
+                const isVisible = title.includes(searchTerm) || artist.includes(searchTerm);
+                item.classList.toggle('hidden-by-search', !isVisible);
+
+                if (isVisible) {
+                    // Find the group header for this item and mark it as visible
+                    let currentElement = item.previousElementSibling;
+                    while (currentElement) {
+                        if (currentElement.classList.contains('playlist-group-header')) {
+                            visibleGroups.add(currentElement);
+                            break;
+                        }
+                        currentElement = currentElement.previousElementSibling;
+                    }
+                }
+            });
+
+            groupHeaders.forEach(header => {
+                header.classList.toggle('hidden-by-search', !visibleGroups.has(header));
+            });
+             // If no items are visible at all, you could show a "No results" message in playlistEl
+        }
+
+        truncateText(text, maxLength = 44) {
+            if (typeof text !== 'string' || !text) return ''; // Handle non-strings or empty strings
+            if (text.length <= maxLength) {
+                return text;
+            }
+            // Ensure maxLength is at least 3 to accommodate "..."
+            if (maxLength < 3) return text.substring(0, maxLength);
+            return text.substring(0, maxLength - 3) + "...";
+        }
+
+        async loadFolder(fileList) {
+            try {
+                await clearPlaylistFromDB();
+                console.log("Cleared old playlist from DB.");
+                localStorage.removeItem('musicPlayerState'); // Clear playback state on new folder load
+                console.log("Cleared playback state from localStorage.");
+                this.currentTrack = 0; // Reset current track index
+                this.isPlaying = false; // Reset playing state
+                // Potentially reset other states like shuffle, loop, or let them persist if desired
+            } catch (error) {
+                console.error("Error clearing DB/localStorage before new load:", error);
+            }
+
+            const mediaFiles = Array.from(fileList).filter(f => f.type.startsWith('audio/') || f.type.startsWith('video/'));
+            
+            const newPlaylistData = []; // To hold data for both this.playlist and DB saving
+
+            for (const file of mediaFiles) {
+                let titleFromFile = file.name.replace(/\.[^/.]+$/, "");
+                let artistFromFile = "";
+                let coverBlob = null; // Store cover as Blob for DB
+                let albumFromFile = "";
+
+                if (file.type.startsWith('audio/mpeg') || file.type.startsWith('audio/mp3')) { 
+                    try {
+                        const tags = await new Promise((resolve, reject) => {
+                            jsmediatags.read(file, {
+                                onSuccess: resolve,
+                                onError: reject
+                            });
+                        });
+                        titleFromFile = tags.tags.title || titleFromFile;
+                        artistFromFile = tags.tags.artist || artistFromFile;
+                        albumFromFile = tags.tags.album || albumFromFile;
+                        if (tags.tags.picture) {
+                            const { data, format } = tags.tags.picture;
+                            coverBlob = new Blob([new Uint8Array(data)], { type: format });
+                        }
+                    } catch (error) {
+                        console.error("Error reading MP3 tags:", file.name, error);
+                    }
+                }
+                
+                const trackForDB = {
+                    title: titleFromFile,
+                    artist: artistFromFile,
+                    album: albumFromFile,
+                    originalFileName: file.name, // Store original name
+                    webkitRelativePath: file.webkitRelativePath || '' ,
+                    fileBlob: file, // This is the actual File object (which is a Blob)
+                    coverBlob: coverBlob 
+                };
+
+                try {
+                    await saveTrackToDB(trackForDB);
+                } catch (error) {
+                    console.error("Failed to save track to DB:", file.name, error);
+                }
+                
+                // For in-memory this.playlist, create Blob URLs immediately
+                newPlaylistData.push({
+                    ...trackForDB, // Spread all data including Blobs
+                    file: URL.createObjectURL(file), // For immediate use
+                    cover: coverBlob ? URL.createObjectURL(coverBlob) : this.defaultCover // For immediate use
+                });
+            }
+
+            this.playlist = newPlaylistData;
+            this.renderPlaylist();
+
+            if (this.playlist.length > 0) {
+                this.loadTrack(0); 
+                this.restartedTrack = false; 
+            } else {
+                this.songTitleEl.textContent = 'No songs loaded';
+                this.artistNameEl.textContent = 'Please load a folder';
+                this.albumArtEl.src = this.defaultCover;
+                this.currentTimeEl.textContent = '0:00';
+                this.durationEl.textContent = '0:00';
+                this.progressBar.style.width = '0%';
+            }
+        }
+
+        loadTrack(idx, restoreTime = null, wasPlayingBeforeRestore = false) {
+            if(!this.playlist || !this.playlist.length || idx < 0 || idx >= this.playlist.length) {
+                 console.warn("LoadTrack: Invalid index or empty playlist.", idx, this.playlist.length);
+                return;
+            }
+            this.currentTrack = idx;
+            const t = this.playlist[idx];
+            this.songTitleEl.textContent = this.truncateText(t.title); 
+            this.artistNameEl.textContent = this.truncateText(t.artist || "Unknown Artist"); 
+            this.albumArtEl.src = t.cover || this.defaultCover; 
+            this.audio.src = t.file; 
+            this.audio.load();
+            this.audio.loop = this.isLooping;
+            this.restartedTrack = false; 
+            this.progressBar.style.width='0%';
+            this.currentTimeEl.textContent='0:00';
+            
+            this.playlistEl.querySelectorAll('.playlist-item').forEach((el,i)=> {
+                const itemIndex = parseInt(el.dataset.index, 10); 
+                el.classList.toggle('active', itemIndex === idx);
+            });
+
+            this.updateMediaSession(); 
+
+            const setInitialPlaybackStateUI = () => {
+                if (wasPlayingBeforeRestore) {
+                    this.isPlaying = true; // Set state internally
+                    this.playPauseBtn.innerHTML='<i class="fas fa-pause"></i>';
+                     if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing";
+                } else {
+                    this.isPlaying = false;
+                    this.playPauseBtn.innerHTML='<i class="fas fa-play"></i>';
+                    if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused";
+                }
+            };
+    
+            if (restoreTime !== null && restoreTime > 0) {
+                const onLoadedMetadata = () => {
+                    if (this.audio.seekable.length > 0) { 
+                         this.audio.currentTime = Math.min(restoreTime, this.audio.duration);
+                    } else {
+                        console.warn("Audio not seekable yet for restoring time.")
+                    }
+                    this.updateProgress(); 
+                    setInitialPlaybackStateUI(); // Set UI based on restored isPlaying state
+                                            // but don't call this.play() automatically
+                };
+                this.audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+                this.audio.addEventListener('canplay', () => {
+                    if (this.audio.currentTime < restoreTime && this.audio.seekable.length > 0) {
+                         this.audio.currentTime = Math.min(restoreTime, this.audio.duration);
+                         this.updateProgress();
+                    }
+                    setInitialPlaybackStateUI(); // Set UI, don't auto-play
+                }, { once: true });
+            } else {
+                // If not restoring time, it's a fresh load or next/prev track.
+                // If wasPlayingBeforeRestore is true (e.g. from init), set UI, but still don't auto-play from here.
+                // User interaction will call the actual play() method.
+                setInitialPlaybackStateUI(); 
+                if (this.isPlaying) { // if it was a fresh load AND isPlaying was true (e.g. from a prev session)
+                     // This case is tricky. For now, we set isPlaying to false if not restoring time from init.
+                     // Or, if this loadTrack call came from a next/prev action while already playing:
+                     if (!wasPlayingBeforeRestore) this.isPlaying = false; // Default to paused unless explicitly told it was playing
+                     // If it WAS playing (e.g. next track action), then this.play() will be called from nextTrack() method
+                }
+            }
+             // If wasPlayingBeforeRestore is true, loadTrack was called from init.
+            // We have set this.isPlaying = true. The user will click play to start.
+            // If loadTrack is called from next/prev/playlist click, those methods will call play().
+        }
+
+        play() {
+            // First, ensure AudioContext is running (user gesture needed for this on first play)
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume().then(() => {
+                    console.log("AudioContext resumed successfully.");
+                    this._doPlay(); // Call the actual play logic
+                }).catch(e => console.error("Error resuming AudioContext:", e));
+            } else {
+                this._doPlay();
+            }
+        }
+
+        _doPlay() { // Renamed original play to _doPlay
+            this.isPlaying=true; 
+            this.playPauseBtn.innerHTML='<i class="fas fa-pause"></i>';
+            if(this.audioContext.state==='suspended') this.audioContext.resume();
+            if(!this.audioSource && this.audio.src){ // Ensure src is set before creating source
+                try {
+                this.audioSource = this.audioContext.createMediaElementSource(this.audio);
+                this.audioSource.connect(this.analyser);
+                } catch(e) {
+                    console.error("Error creating media element source:", e);
+                     // Fallback or reset if audio element is not ready
+                    if (this.audio.readyState === 0 && this.playlist[this.currentTrack]) { // HAVE_NOTHING
+                        console.warn("Audio source not ready, attempting to reload track data.");
+                        this.audio.src = this.playlist[this.currentTrack].file;
+                        this.audio.load();
+                        // Defer play call until canplay or similar event
+                        this.audio.addEventListener('canplay', () => this.play(), {once: true});
+                        return; 
+                    }
+                }
+            }
+            this.audio.play().catch(error => {
+                console.error("Error playing audio:", error);
+                // Handle errors like user interaction needed
+                this.isPlaying = false; // Reset state if play fails
+                this.playPauseBtn.innerHTML='<i class="fas fa-play"></i>';
+                if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; // Update session state on error
+            });
+            if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing";
+            this.savePlaybackState();
+        }
+        pause(){
+            this.isPlaying=false; 
+            this.playPauseBtn.innerHTML='<i class="fas fa-play"></i>'; 
+            this.audio.pause(); 
+            this.restartedTrack = false; 
+            if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused";
+            this.savePlaybackState();
+        }
+        togglePlay(){ 
+            this.isPlaying?this.pause():this.play(); 
+            // Save state handled by play/pause methods
+        }
+        prevTrack(){
+            if (this.audio.currentTime > 3 && !this.restartedTrack) { // Restart if played more than 3s and not just restarted
+                this.audio.currentTime = 0;
+                this.restartedTrack = true;
+            } else {
+                this.loadTrack(this.currentTrack - 1);
+                this.restartedTrack = false; // Reset for the new track
+            }
+        }
+        nextTrack(){
+            this.restartedTrack = false;
+            if (this.isShuffling) {
+                if (this.playlist.length <= 1) {
+                    this.loadTrack(0);
+                    return;
+                }
+                let nextIndex;
+                do {
+                    nextIndex = Math.floor(Math.random() * this.playlist.length);
+                } while (nextIndex === this.currentTrack && this.playlist.length > 1); // Avoid playing same song again if playlist > 1
+                
+                // Basic history to avoid immediate repeats more robustly (optional enhancement)
+                // For now, the simple check above is fine.
+                this.loadTrack(nextIndex);
+            } else {
+                this.loadTrack(this.currentTrack + 1);
+            }
+        }
+        updateProgress(){
+            const d=this.audio.duration, c=this.audio.currentTime;
+            if(d){
+                this.progressBar.style.width=`${(c/d)*100}%`;
+                this.durationEl.textContent=this.formatTime(d);
+            }
+            this.currentTimeEl.textContent=this.formatTime(c);
+            if (c < 3 && this.restartedTrack) { // If user seeks back to beginning manually, allow prevTrack to go to previous song again
+                this.restartedTrack = false;
+            }
+        }
+        formatTime(s){ const m=Math.floor(s/60), sec=Math.floor(s%60); return `${m}:${sec<10?'0':''}${sec}`; }
+        updateVolumeIcon(){
+            let iconClass = 'fas fa-volume-high';
+            if (this.volume === 0) iconClass = 'fas fa-volume-xmark';
+            else if (this.volume < 0.5) iconClass = 'fas fa-volume-low';
+            this.volumeBtn.innerHTML = `<i class="${iconClass}"></i>`;
+        }
+
+        toggleLoop() {
+            this.isLooping = !this.isLooping;
+            this.audio.loop = this.isLooping;
+            this.loopBtn.classList.toggle('active', this.isLooping);
+        }
+
+        toggleShuffle() {
+            this.isShuffling = !this.isShuffling;
+            this.shuffleBtn.classList.toggle('active', this.isShuffling);
+            if (this.isShuffling) {
+                // Optional: Clear play history when shuffle is turned on
+                this.playHistory = [this.currentTrack]; 
+            }
+        }
+
+        handleTrackEnd() {
+            if (!this.isLooping) {
+                this.nextTrack();
+            }
+        }
+
+        renderPlaylist(){
+            this.playlistEl.innerHTML='';
+            if (!this.playlist || this.playlist.length === 0) {
+                this.playlistEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Load some music!</div>';
+                return;
+            }
+
+            // Simple grouping by immediate parent folder for now
+            const groupedPlaylist = {};
+            this.playlist.forEach(track => {
+                const pathParts = track.webkitRelativePath.split('/');
+                let groupName = 'Tracks'; // Default group for files in root
+                if (pathParts.length > 1) {
+                    groupName = pathParts.slice(0, -1).join(' / '); // Use full parent path as group name
+                }
+                if (!groupedPlaylist[groupName]) {
+                    groupedPlaylist[groupName] = [];
+                }
+                groupedPlaylist[groupName].push(track);
+            });
+
+            let trackIndex = 0;
+            for (const groupName in groupedPlaylist) {
+                const groupHeader = document.createElement('div');
+                groupHeader.className = 'playlist-group-header';
+                groupHeader.textContent = groupName;
+                this.playlistEl.appendChild(groupHeader);
+
+                groupedPlaylist[groupName].forEach(t => {
+                const item = document.createElement('div');
+                    const currentTrackOriginalIndex = this.playlist.indexOf(t); // Get actual current index in the full (possibly reordered) playlist
+                    item.className='playlist-item'; // Base class
+                    if (currentTrackOriginalIndex === this.currentTrack) {
+                        item.classList.add('active');
+                    }
+                    item.dataset.index = currentTrackOriginalIndex; // Store the actual current index
+                    item.dataset.fileUrl = t.file; // Store file URL for reliable identification on click
+                    item.draggable = true; // Make item draggable
+
+                // Truncate text for display in playlist
+                const displayTitle = this.truncateText(t.title);
+                const displayArtist = this.truncateText(t.artist || 'Unknown Artist');
+
+                item.innerHTML=`
+                        <div class=\"playlist-item-number\">${trackIndex + 1}</div>
+                        <img src=\"${t.cover || this.defaultCover}\" class=\"playlist-item-cover\" alt=\"C\" />
+                        <div class=\"playlist-item-details\">
+                            <div class=\"playlist-item-title\">${displayTitle}</div>
+                            <div class=\"playlist-item-artist\">${displayArtist}</div>
+                    </div>
+                `;
+                    item.addEventListener('click', ()=>{ 
+                        // Find the track by its fileUrl to get the most up-to-date index
+                        const clickedTrackIndex = this.playlist.findIndex(track => track.file === item.dataset.fileUrl);
+                        if (clickedTrackIndex !== -1) {
+                            this.loadTrack(clickedTrackIndex); 
+                            this.play(); 
+                        }
+                    });
+                this.playlistEl.appendChild(item);
+                    trackIndex++;
+                });
+            }
+            this.restartedTrack = false; 
+            this.progressBar.style.width='0%';
+            this.currentTimeEl.textContent='0:00';
+            // Update active class based on currentTrack after reordering or loading
+            this.playlistEl.querySelectorAll('.playlist-item').forEach(el => {
+                const itemIndex = parseInt(el.dataset.index, 10);
+                el.classList.toggle('active', itemIndex === this.currentTrack);
+            });
+            
+            if(this.isPlaying) this.play();
+        }
+
+        getAudioData(){
+            const bufLen=this.analyser.frequencyBinCount;
+            const arr=new Uint8Array(bufLen);
+            this.analyser.getByteFrequencyData(arr);
+            return arr;
+        }
+
+        // Touch event handlers for playlist drag-drop
+        handleTouchStart(e) {
+            const item = e.target.closest('.playlist-item');
+            if (!item || item.classList.contains('hidden-by-search')) return;
+            // e.preventDefault(); // Prevent scrolling while dragging item, if desired, but can interfere with normal scroll
+            
+            this.touchDragState.draggedItem = item;
+            this.touchDragState.draggedItemIndex = parseInt(item.dataset.index, 10);
+            this.touchDragState.initialY = e.touches[0].clientY;
+            item.classList.add('dragging');
+        }
+
+        handleTouchMove(e) {
+            if (!this.touchDragState.draggedItem) return;
+            e.preventDefault(); // Crucial to prevent page scroll while dragging
+
+            const currentY = e.touches[0].clientY;
+            // Optional: Add visual feedback for item being moved (e.g., transform translateY)
+            // this.touchDragState.draggedItem.style.transform = `translateY(${currentY - this.touchDragState.initialY}px)`;
+
+            this.clearDragOverTargets();
+            const targetElement = document.elementFromPoint(e.touches[0].clientX, currentY);
+            const dropTarget = targetElement ? targetElement.closest('.playlist-item') : null;
+
+            if (dropTarget && dropTarget !== this.touchDragState.draggedItem && !dropTarget.classList.contains('hidden-by-search')) {
+                dropTarget.classList.add('drag-over-target');
+                this.touchDragState.currentTarget = dropTarget;
+            } else {
+                this.touchDragState.currentTarget = null;
+            }
+        }
+
+        handleTouchEnd(e) {
+            if (!this.touchDragState.draggedItem) return;
+
+            this.touchDragState.draggedItem.classList.remove('dragging');
+            // this.touchDragState.draggedItem.style.transform = ''; // Reset visual style
+            this.clearDragOverTargets();
+
+            if (this.touchDragState.currentTarget) {
+                const droppedOnItemIndex = parseInt(this.touchDragState.currentTarget.dataset.index, 10);
+                const draggedItemIndex = this.touchDragState.draggedItemIndex;
+
+                if (draggedItemIndex !== null && draggedItemIndex !== droppedOnItemIndex) {
+                    const itemToMove = this.playlist.splice(draggedItemIndex, 1)[0];
+                    this.playlist.splice(droppedOnItemIndex, 0, itemToMove);
+
+                    if (draggedItemIndex < this.currentTrack && droppedOnItemIndex >= this.currentTrack) {
+                        this.currentTrack--;
+                    } else if (draggedItemIndex > this.currentTrack && droppedOnItemIndex <= this.currentTrack) {
+                        this.currentTrack++;
+                    } else if (draggedItemIndex === this.currentTrack) {
+                        this.currentTrack = droppedOnItemIndex;
+                    }
+                    this.renderPlaylist();
+                }
+            }
+            this.touchDragState = {}; // Reset state
+        }
+
+        toggleMobilePlaylistHeight() {
+            const sidebar = document.getElementById('sidebar');
+            const icon = this.togglePlaylistHeightBtn.querySelector('i');
+            sidebar.classList.toggle('sidebar-mobile-expanded');
+
+            if (sidebar.classList.contains('sidebar-mobile-expanded')) {
+                this.togglePlaylistHeightBtn.innerHTML = 'Less <i class="fas fa-chevron-up"></i>';
+            } else {
+                this.togglePlaylistHeightBtn.innerHTML = 'More <i class="fas fa-chevron-down"></i>';
+            }
+        }
+
+        savePlaybackState() {
+            if (!this.playlist || this.playlist.length === 0 || this.currentTrack < 0 || this.currentTrack >= this.playlist.length) {
+                // If playlist is empty or currentTrack is invalid, remove old state
+                // localStorage.removeItem('musicPlayerState'); // Optional: clear if invalid
+                return; 
+            }
+            const state = {
+                currentTrack: this.currentTrack,
+                currentTime: this.audio.currentTime,
+                volume: this.volume,
+                isLooping: this.isLooping,
+                isShuffling: this.isShuffling,
+                isPlaying: this.isPlaying
+            };
+            localStorage.setItem('musicPlayerState', JSON.stringify(state));
+            // console.log("Playback state saved:", state); // For debugging
+        }
+
+        updateMediaSession() {
+            if (!('mediaSession' in navigator) || !this.playlist || this.playlist.length === 0) {
+                return;
+            }
+    
+            const track = this.playlist[this.currentTrack];
+            if (!track) return;
+    
+            const artworkSrc = this.albumArtEl.src || this.defaultCover; 
+    
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: track.title || 'Unknown Title',
+                artist: track.artist || 'Unknown Artist',
+                album: track.album || 'Unknown Album', 
+                artwork: [
+                    { src: artworkSrc, sizes: '96x96', type: 'image/png' }, // Primary size
+                    { src: artworkSrc, sizes: '128x128', type: 'image/png' },
+                    { src: artworkSrc, sizes: '192x192', type: 'image/png' },
+                    { src: artworkSrc, sizes: '256x256', type: 'image/png' },
+                    { src: artworkSrc, sizes: '384x384', type: 'image/png' },
+                    { src: artworkSrc, sizes: '512x512', type: 'image/png' },
+                ]
+            });
+    
+            if (!this.mediaSessionActionsSetup) { 
+                navigator.mediaSession.setActionHandler('play', () => this.play());
+                navigator.mediaSession.setActionHandler('pause', () => this.pause());
+                navigator.mediaSession.setActionHandler('previoustrack', () => this.prevTrack());
+                navigator.mediaSession.setActionHandler('nexttrack', () => this.nextTrack());
+                // Optional: Add handlers for seekforward, seekbackward if you implement seeking controls/logic
+                // navigator.mediaSession.setActionHandler('seekbackward', (details) => { this.audio.currentTime = Math.max(0, this.audio.currentTime - (details.seekOffset || 10)); });
+                // navigator.mediaSession.setActionHandler('seekforward', (details) => { this.audio.currentTime = Math.min(this.audio.duration, this.audio.currentTime + (details.seekOffset || 10)); });
+                this.mediaSessionActionsSetup = true;
+            }
+            navigator.mediaSession.playbackState = this.isPlaying ? "playing" : "paused";
+        }
+    }
+
+    class Visualizer {
+        constructor(mp) {
+            this.musicPlayer = mp;
+            this.container = document.getElementById('visualizer-container');
+            this.particleCount = 1800; // Slightly more particles
+            this.centralElement = null;
+            this.lastBassHitTime = 0;
+            this.bassHitThreshold = 180; // Adjusted threshold for bass hits (0-255 scale)
+            this.bassPeakDecay = 0.95;
+            this.currentBassPeak = 0;
+            this.cameraShakeIntensity = 0;
+            this.lastVocalEnergy = 0;
+            this.vocalPresenceThreshold = 0.3; // Normalized energy threshold for vocal presence
+
+            this.init();
+        }
+        init(){
+            this.setupScene();
+            this.createCentralElement(); // Create a central element
+            this.createParticles();
+            this.animate();
+            window.addEventListener('resize', ()=>this.onWindowResize());
+        }
+        setupScene(){
+            this.scene = new THREE.Scene();
+            const w=this.container.clientWidth, h=this.container.clientHeight;
+            this.camera = new THREE.PerspectiveCamera(75, w/h, 0.1, 1000);
+            this.camera.position.z=40; // Pushed camera back a bit
+            this.renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+            this.renderer.setSize(w,h);
+            this.renderer.setClearColor(0x000000,0);
+            this.container.appendChild(this.renderer.domElement);
+        }
+
+        createCentralElement() {
+            // Simple pulsing sphere as a central element
+            const geometry = new THREE.IcosahedronGeometry(2, 1); // Radius 2, detail 1
+            const material = new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                emissive: 0x330033, 
+                specular: 0xaaaaaa, // Brighter specular for more pop
+                shininess: 50,
+                flatShading: true,
+                transparent: true,
+                opacity: 0.6 // Slightly more transparent
+            });
+            this.centralElement = new THREE.Mesh(geometry, material);
+            this.scene.add(this.centralElement);
+
+            // Add a point light to make the central element and particles look better
+            const pointLight = new THREE.PointLight(0xffffff, 0.7, 200);
+            pointLight.position.set(0, 0, 20);
+            this.scene.add(pointLight);
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // Softer ambient light
+            this.scene.add(ambientLight);
+        }
+
+        createParticles(){
+            const geo=new THREE.BufferGeometry();
+            const pos=new Float32Array(this.particleCount*3),
+                  col=new Float32Array(this.particleCount*3),
+                  sz=new Float32Array(this.particleCount),
+                  vel=new Float32Array(this.particleCount*3),
+                  particleType=new Float32Array(this.particleCount); // 0 for normal, 1 for vocal-reactive
+
+            for(let i=0;i<this.particleCount;i++){
+                // Initialize particles at the center, they will burst outwards
+                pos[i*3]=0;
+                pos[i*3+1]=0;
+                pos[i*3+2]=0;
+
+                // Random initial velocities for bursting effect
+                const theta = Math.random() * 2 * Math.PI;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                const speed = Math.random() * 0.5 + 0.2; // Random speed
+                vel[i*3] = speed * Math.sin(phi) * Math.cos(theta);
+                vel[i*3+1] = speed * Math.sin(phi) * Math.sin(theta);
+                vel[i*3+2] = speed * Math.cos(phi);
+
+                col[i*3]=1; col[i*3+1]=1; col[i*3+2]=1; 
+                sz[i]=Math.random()*0.25+0.05; // Slightly smaller base for more dynamic range
+                particleType[i] = Math.random() < 0.2 ? 1 : 0; // ~20% particles are vocal-reactive type
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+            geo.setAttribute('color', new THREE.BufferAttribute(col,3));
+            geo.setAttribute('size', new THREE.BufferAttribute(sz,1));
+            geo.setAttribute('velocity', new THREE.BufferAttribute(vel,3));
+            geo.setAttribute('particleType', new THREE.BufferAttribute(particleType, 1));
+
+            const mat=new THREE.PointsMaterial({ 
+                size:0.5, // Base size in material, can be scaled by attribute
+                vertexColors:true, 
+                transparent:true, 
+                opacity:0.8, 
+                sizeAttenuation:true,
+                // blending: THREE.AdditiveBlending // For a brighter, glowy look
+            });
+            this.particleSystem=new THREE.Points(geo, mat);
+            this.scene.add(this.particleSystem);
+        }
+
+        updateParticles(){
+            if(!this.musicPlayer.isPlaying || !this.musicPlayer.analyser) return;
+
+            const audioData = this.musicPlayer.getAudioData();
+            const positions = this.particleSystem.geometry.attributes.position.array;
+            const sizes = this.particleSystem.geometry.attributes.size.array;
+            const colors = this.particleSystem.geometry.attributes.color.array;
+            const velocities = this.particleSystem.geometry.attributes.velocity.array;
+            
+            const dataArray = audioData ? audioData : new Uint8Array(this.musicPlayer.analyser.frequencyBinCount).fill(0);
+
+            // Detailed audio analysis
+            let bassSum = 0, midSum = 0, highSum = 0, vocalSum = 0;
+            const bassBins = Math.floor(dataArray.length * 0.1); // ~0-10% for bass (e.g. up to ~100-150Hz)
+            const vocalStartBin = Math.floor(dataArray.length * 0.05); // Approx 50-100Hz (avoiding lowest rumble)
+            const vocalEndBin = Math.floor(dataArray.length * 0.35);   // Approx up to ~1.5-2kHz for main vocal body
+            const midStartBin = bassBins;
+            const midEndBin = Math.floor(dataArray.length * 0.5);
+
+            for(let j = 0; j < dataArray.length; j++) {
+                const val = dataArray[j];
+                if (j < bassBins) bassSum += val;
+                if (j >= vocalStartBin && j < vocalEndBin) vocalSum += val;
+                if (j >= midStartBin && j < midEndBin) midSum += val;
+                else if (j >= midEndBin) highSum += val;
+            }
+
+            const avgBassRaw = (bassSum / (bassBins || 1));
+            const avgVocalEnergy = (vocalSum / ((vocalEndBin - vocalStartBin) || 1)) / 255;
+            const avgMid = (midSum / ((midEndBin - midStartBin) || 1)) / 255;
+            const avgHigh = (highSum / ((dataArray.length - midEndBin) || 1)) / 255;
+            const overallIntensity = dataArray.reduce((a,b) => a+b, 0) / dataArray.length / 255;
+
+            // Bass Hit Detection & Effect
+            this.currentBassPeak = Math.max(avgBassRaw, this.currentBassPeak * this.bassPeakDecay);
+            let isBassHit = false;
+            if (this.currentBassPeak > this.bassHitThreshold && (this.musicPlayer.audio.currentTime * 1000 - this.lastBassHitTime > 100)) { // Debounce 100ms
+                isBassHit = true;
+                this.lastBassHitTime = this.musicPlayer.audio.currentTime * 1000;
+                this.cameraShakeIntensity = 0.8; // Trigger camera shake
+            }
+
+            // Vocal Presence (Smoothed)
+            const vocalPresence = avgVocalEnergy > this.vocalPresenceThreshold;
+            this.lastVocalEnergy = avgVocalEnergy; // For potential future transient detection in vocal range
+
+            // Update central element
+            if (this.centralElement) {
+                let scale = 1 + (this.currentBassPeak / 255) * 2.5; // More reactive to peak
+                if(isBassHit) scale *= 1.3; // Extra punch on hit
+                this.centralElement.scale.set(scale, scale, scale);
+                this.centralElement.rotation.x += 0.005 + avgMid * 0.02;
+                this.centralElement.rotation.y += 0.003 + avgMid * 0.02;
+                this.centralElement.material.emissiveIntensity = (this.currentBassPeak / 255) * 3 + (isBassHit ? 1.5 : 0.5);
+                if(isBassHit) {
+                    // Quick color flash for central element
+                    this.centralElement.material.color.setHex(0xffaa00);
+                    setTimeout(() => { if(this.centralElement) this.centralElement.material.color.setHex(0xffffff); }, 100);
+                }
+            }
+
+            for(let i=0;i<this.particleCount;i++){
+                const i3 = i * 3;
+                const pType = this.particleSystem.geometry.attributes.particleType.array[i];
+
+                // Update positions based on velocity
+                let speedMultiplier = 1 + (this.currentBassPeak / 255) * (pType === 1 && vocalPresence ? 1.5 : 3); // Vocal particles less affected by bass speedup
+                if (isBassHit) speedMultiplier *= (pType === 1 ? 1.2 : 2.5); // Stronger burst for non-vocal on bass hit
+
+                positions[i3] += velocities[i3] * speedMultiplier;
+                positions[i3+1] += velocities[i3+1] * speedMultiplier;
+                positions[i3+2] += velocities[i3+2] * speedMultiplier;
+
+                // Particle lifetime / reset logic
+                const distSq = positions[i3]*positions[i3] + positions[i3+1]*positions[i3+1] + positions[i3+2]*positions[i3+2];
+                let resetDistance = (60 + (this.currentBassPeak / 255) * 100);
+                if (pType === 1 && vocalPresence) resetDistance *= 0.7; // Vocal particles stay closer
+
+                if(distSq > resetDistance * resetDistance ) { 
+                    positions[i3]=0;
+                    positions[i3+1]=0;
+                    positions[i3+2]=0;
+                    const theta = Math.random() * 2 * Math.PI;
+                    const phi = Math.acos((Math.random() * 2) - 1);
+                    let speed = (Math.random() * 0.2 + 0.1) * (1 + (isBassHit ? (pType === 1 ? 0.5: 2) : 0)); 
+                    if (pType === 1 && vocalPresence) speed *= 0.6; // Vocal particles slower initial burst
+
+                    velocities[i3] = speed * Math.sin(phi) * Math.cos(theta);
+                    velocities[i3+1] = speed * Math.sin(phi) * Math.sin(theta);
+                    velocities[i3+2] = speed * Math.cos(phi);
+                }
+
+                const freqIndex = Math.floor((i / this.particleCount) * dataArray.length);
+                const val = dataArray[freqIndex] / 255;
+
+                sizes[i]=Math.max(0.03, val * 0.6 + (this.currentBassPeak/255) * (pType === 1 ? 0.2 : 0.6) + (isBassHit ? 0.3:0) );
+                if (pType === 1 && vocalPresence) sizes[i] *= 1.8; // Vocal particles larger when vocals present
+
+                let hue, saturation, lightness;
+                if (pType === 1 && vocalPresence) { // Vocal-reactive particles styling
+                    hue = ( (this.musicPlayer.audio.currentTime * 5 + avgVocalEnergy * 360) % 360 ) / 360; // Shift hue with vocal energy
+                    saturation = 0.9 + Math.min(0.1, avgVocalEnergy * 0.5);
+                    lightness = 0.6 + Math.min(0.4, avgVocalEnergy * 0.8); // Brighter for vocals
+                } else { // Default particles
+                    hue = ( (this.musicPlayer.audio.currentTime * 10 + freqIndex / dataArray.length * 90 + (this.currentBassPeak/255) * 180) % 360 ) / 360;
+                    saturation = 0.7 + val * 0.3; 
+                    lightness = 0.4 + val * 0.3 + avgHigh * 0.15 + (isBassHit ? 0.2 : 0);
+                }
+
+                const rgb=this.hslToRgb(hue, saturation, Math.min(1, lightness));
+                colors[i3]=rgb[0]; colors[i3+1]=rgb[1]; colors[i3+2]=rgb[2];
+            }
+
+            ['position','size','color'].forEach(att=>
+                this.particleSystem.geometry.attributes[att].needsUpdate=true
+            );
+            
+            // Camera Shake Logic
+            if (this.cameraShakeIntensity > 0) {
+                this.camera.position.x += (Math.random() - 0.5) * this.cameraShakeIntensity * 2;
+                this.camera.position.y += (Math.random() - 0.5) * this.cameraShakeIntensity * 1;
+                this.cameraShakeIntensity -= 0.08; // Dampen shake
+            } else {
+                this.cameraShakeIntensity = 0; // Ensure it's reset
+                 // Gradual return to center X if not shaking
+                this.camera.position.x += (0 - this.camera.position.x) * 0.1;
+                this.camera.position.y += (0 - this.camera.position.y) * 0.1;
+            }
+
+            // Camera zoom based on overall intensity, less aggressive than before
+            if (this.musicPlayer.isPlaying && dataArray.length > 0) {
+                 this.camera.position.z = 40 - overallIntensity * 10 - (this.currentBassPeak/255)*5; 
+                 this.camera.lookAt(this.scene.position); 
+            }
+        }
+        hslToRgb(h,s,l){
+            let r,g,b;
+            if(s===0) r=g=b=l;
+            else{
+                const hue2rgb=(p,q,t)=>{
+                    if(t<0) t+=1; if(t>1) t-=1;
+                    if(t<1/6) return p+(q-p)*6*t;
+                    if(t<1/2) return q;
+                    if(t<2/3) return p+(q-p)*(2/3-t)*6;
+                    return p;
+                };
+                const q=l<0.5?l*(1+s):l+s-l*s;
+                const p=2*l-q;
+                r=hue2rgb(p,q,h+1/3);
+                g=hue2rgb(p,q,h);
+                b=hue2rgb(p,q,h-1/3);
+            }
+            return [r,g,b];
+        }
+        animate(){ requestAnimationFrame(()=>this.animate()); this.updateParticles(); this.renderer.render(this.scene,this.camera); }
+        onWindowResize(){
+            const w=this.container.clientWidth, h=this.container.clientHeight;
+            this.camera.aspect=w/h; this.camera.updateProjectionMatrix();
+            this.renderer.setSize(w,h);
+        }
+    }
+
+    window.addEventListener('load', ()=>{
+        const player = new MusicPlayer();
+        new Visualizer(player);
+
+        const themeToggleButton = document.createElement('button');
+        themeToggleButton.innerHTML = '<i class="fas fa-palette"></i>';
+        themeToggleButton.style.position = 'fixed';
+        themeToggleButton.style.bottom = '20px';
+        themeToggleButton.style.right = '20px';
+        themeToggleButton.style.padding = '10px';
+        themeToggleButton.style.fontSize = '1.3rem';
+        themeToggleButton.style.backgroundColor = 'var(--primary-elements)';
+        themeToggleButton.style.color = 'var(--text-color)';
+        themeToggleButton.style.border = '1px solid var(--border-main)';
+        themeToggleButton.style.borderRadius = '50%';
+        themeToggleButton.style.cursor = 'pointer';
+        themeToggleButton.style.zIndex = '1001';
+        themeToggleButton.style.width = '40px';
+        themeToggleButton.style.height = '40px';
+        themeToggleButton.style.display = 'flex';
+        themeToggleButton.style.alignItems = 'center';
+        themeToggleButton.style.justifyContent = 'center';
+        themeToggleButton.title = "Toggle Theme";
+        themeToggleButton.id = "theme-toggle-btn";
+
+        let currentTheme = 1;
+        const themes = [
+            { // Light Theme (Apple Music Inspired)
+                '--bg-color': '#f8f8f8',
+                '--primary-elements': '#ffffff',
+                '--secondary-elements': '#e8e8e8',
+                '--text-color': '#333333',
+                '--text-muted': '#777777',
+                '--accent-color': '#007aff', // Apple Blue
+                '--hover-accent': '#005ecb',
+                '--button-text': '#333333',
+                '--border-main': '#d1d1d1',
+                '--border-radius-main': '8px',
+                '--border-radius-small': '6px',
+                '--player-bar-bg': 'rgba(240, 240, 240, 0.85)', // Slightly transparent for player bar
+                '--sidebar-bg': '#f0f0f0',
+                '--selected-item-bg': 'rgba(0, 122, 255, 0.1)',
+                '--selected-item-text': '#007aff',
+                '--shadow-color': 'rgba(0, 0, 0, 0.1)'
+            },
+            { // Dark Theme (Apple Music Dark Mode Inspired)
+                '--bg-color': '#1c1c1e',
+                '--primary-elements': '#2c2c2e',
+                '--secondary-elements': '#3a3a3c',
+                '--text-color': '#ffffff',
+                '--text-muted': '#8e8e93',
+                '--accent-color': '#0a84ff', // Apple Blue (Dark Mode)
+                '--hover-accent': '#0060df',
+                '--button-text': '#ffffff',
+                '--border-main': '#38383a',
+                '--border-radius-main': '8px',
+                '--border-radius-small': '6px',
+                '--player-bar-bg': 'rgba(36, 36, 38, 0.85)',
+                '--sidebar-bg': '#232325',
+                '--selected-item-bg': 'rgba(10, 132, 255, 0.2)',
+                '--selected-item-text': '#0a84ff',
+                '--shadow-color': 'rgba(0, 0, 0, 0.3)'
+            },
+            { // Original Synthwave (Kept for variety)
+                '--bg-color': '#0d0221',
+                '--primary-elements': '#240046',
+                '--secondary-elements': '#3c096c',
+                '--text-color': '#f0f0f0',
+                '--text-muted': '#a0a0a0',
+                '--accent-color': '#ff00e0',
+                '--hover-accent': '#c000a0',
+                '--button-text': '#e0e0e0'
+            }
+        ];
+
+        function applyTheme(theme) {
+            for (const [key, value] of Object.entries(theme)) {
+                document.documentElement.style.setProperty(key, value);
+            }
+        }
+
+        themeToggleButton.addEventListener('click', () => {
+            currentTheme = (currentTheme + 1) % themes.length;
+            applyTheme(themes[currentTheme]);
+            localStorage.setItem('musicPlayerTheme', currentTheme);
+        });
+
+        const savedTheme = localStorage.getItem('musicPlayerTheme');
+        if (savedTheme !== null) {
+            currentTheme = parseInt(savedTheme, 10);
+        } else {
+            currentTheme = 1; // Default to the second theme (Apple Dark)
+        }
+
+        document.body.appendChild(themeToggleButton);
+        applyTheme(themes[currentTheme]); // Apply initial theme (saved or default Light)
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js', { scope: './' }) // Ensure sw.js is in the same directory and set scope
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
+        }
+    });
+    </script>
+</body>
+</html>
