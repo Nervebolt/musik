@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sleek Music Player</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
@@ -28,6 +28,7 @@
             --shadow-color: rgba(0, 0, 0, 0.1);
             --sidebar-width: 280px;
             --player-bar-height: 90px;
+            --system-navbar-space: 0px; /* Default no space */
         }
 
         * {
@@ -43,6 +44,7 @@
             display: flex; /* Use flex for app-container to fill height */
             height: 100vh;
             overflow: hidden;
+            padding-bottom: var(--system-navbar-space); /* Add padding at the bottom */
         }
 
         #app-container {
@@ -390,16 +392,12 @@
         }
 
         /* Theme Toggle Button - Reposition and Restyle for new layout */
-        #theme-toggle-btn {
+        /* This will be overridden by JS, but good to have base style */
+         #theme-toggle-btn { /* Assuming JS will set this ID or class */
             position: fixed;
-            /* Fallback values */
-            bottom: 20px;
+            bottom: calc(20px + var(--system-navbar-space)); /* Above player bar */
             right: 20px;
-            /* Preferred values with safe area insets */
-            bottom: calc(20px + env(safe-area-inset-bottom));
-            right: calc(20px + env(safe-area-inset-right));
-
-            padding: 10px; 
+            padding: 8px;
             font-size: 1.3rem;
             background-color: var(--primary-elements);
             color: var(--text-color);
@@ -440,18 +438,21 @@
 
         /* Responsive Adjustments */
         @media (max-width: 768px) { /* Tablet and larger mobile */
+            :root {
+                 --system-navbar-space: 30px;
+            }
             #app-container {
                 grid-template-columns: 1fr; 
-                grid-template-rows: auto 1fr var(--player-bar-height); 
+                grid-template-rows: auto 1fr var(--player-bar-height);
             }
             #sidebar {
-                grid-row: 1 / 2; /* Restore to grid flow */
-                grid-column: 1 / 2; /* Restore to grid flow */
-                width: 100%; /* Was var(--sidebar-width) with fixed, now 100% for stacked */
-                height: auto; /* Restore auto height */
-                max-height: 40vh; /* Restore max-height for stacked layout */
-                border-right: none; /* Revert from fixed version */
-                border-bottom: 1px solid var(--border-main); /* Restore bottom border for stacked */
+                grid-row: 1 / 2;
+                grid-column: 1 / 2;
+                width: 100%;
+                height: auto;
+                max-height: 40vh;
+                border-right: none;
+                border-bottom: 1px solid var(--border-main);
                 overflow-y: auto; 
                 display: flex; 
                 flex-direction: column;
@@ -472,32 +473,32 @@
             #player-bar {
                 grid-row: 3 / 4;
                 grid-column: 1 / 2;
-                grid-template-columns: auto 1fr; /* Song Info | Controls/Progress -- Volume removed by default here */
-                padding: 0 10px; /* Reduced padding */
-                column-gap: 10px; /* Add some gap between song info and controls */
+                grid-template-columns: auto 1fr; 
+                padding: 0 10px;
+                column-gap: 10px;
             }
             .player-song-info .song-details {
-                 max-width: 100px; /* Further limit width on smaller screens */
-                 font-size: 0.9em; /* Slightly smaller font for song details */
+                 max-width: 100px;
+                 font-size: 0.9em;
             }
             .player-song-info .album-cover img {
-                width: 40px; /* Smaller album art */
+                width: 40px;
                 height: 40px;
                 margin-right: 10px;
             }
             .player-controls-progress {
-                padding: 0 5px; /* Reduce padding further */
+                padding: 0 5px;
             }
              .controls .control-btn { 
-                margin: 0 5px; /* Reduced margin for control buttons */
-                font-size: 1.1rem; /* Smaller control buttons */
+                margin: 0 5px;
+                font-size: 1.1rem;
                 padding: 6px;
             }
              .play-pause { 
                 width: 38px; 
                 height: 38px; 
                 font-size: 1.4rem; 
-                border-width: 1.5px; /* Thinner border */
+                border-width: 1.5px;
             }
 
             .player-volume-controls { display: none; } 
@@ -506,14 +507,15 @@
         @media (max-width: 480px) { /* Small mobile screens */
             :root {
                 --sidebar-width: 100%; 
-                --player-bar-height: auto; /* Allow player bar to grow if needed */
+                --player-bar-height: auto; 
+                --system-navbar-space: 60px;
             }
              #sidebar {
-                padding-top: 10px; /* Reduced padding */
-                max-height: 35vh; /* Initial max-height for smallest screens */
+                padding-top: 10px;
+                max-height: 35vh;
             }
             #sidebar.sidebar-mobile-expanded {
-                max-height: 70vh; /* Expanded height for smallest screens */
+                max-height: 70vh;
             }
             .logo-container { padding: 0 10px 10px 10px;}
             #load-folder { font-size: 0.85rem; padding: 6px 10px;}
@@ -528,13 +530,13 @@
                 grid-template-columns: 1fr; 
                 grid-template-rows: auto auto; 
                 height: auto; 
-                padding: 8px 10px; /* Reduced padding */
+                padding: 8px 10px;
                 row-gap: 8px;
             }
             .player-song-info {
                 grid-row: 1 / 2;
                 grid-column: 1/2;
-                justify-content: flex-start; /* Align to start */
+                justify-content: flex-start;
                 text-align: left;
             }
              .player-song-info .album-cover img { 
@@ -543,13 +545,13 @@
                 margin-right: 8px;
             }
              .player-song-info .song-details { 
-                max-width: calc(100% - 44px); /* Adjust based on album art size + margin */
+                max-width: calc(100% - 44px);
                 align-items: flex-start;
                 font-size: 0.85em;
             }
             .player-song-info .song-title,
             .player-song-info .artist-name {
-                 white-space: nowrap; /* Ensure they stay on one line */
+                 white-space: nowrap;
                  overflow: hidden;
                  text-overflow: ellipsis;
             }
@@ -561,11 +563,11 @@
             }
             .controls { 
                 margin-bottom: 8px;
-                justify-content: space-around; /* Distribute controls more evenly */
+                justify-content: space-around;
             }
             .controls .control-btn {
-                margin: 0 3px; /* Minimal margin */
-                font-size: 1rem; /* Even smaller icons */
+                margin: 0 3px;
+                font-size: 1rem;
                 padding: 5px;
             }
             .play-pause {
@@ -576,18 +578,12 @@
             .progress-container { width: 100%;}
             .time { font-size: 0.7rem; width: 35px;}
             
-            #theme-toggle-btn { /* Styles for small mobile screens */
-                /* Fallback values */
-                bottom: 15px;
+            #theme-toggle-btn {
+                bottom: calc(15px + var(--system-navbar-space));
                 right: 15px;
-                /* Preferred values with safe area insets */
-                bottom: calc(15px + env(safe-area-inset-bottom));
-                right: calc(15px + env(safe-area-inset-right));
-
-                width: 38px; 
+                width: 38px;
                 height: 38px;
                 font-size: 1.2rem;
-                padding: 8px; /* Adjusted for smaller button */
             }
         }
 
@@ -1879,10 +1875,9 @@
         const themeToggleButton = document.createElement('button');
         themeToggleButton.innerHTML = '<i class="fas fa-palette"></i>';
         themeToggleButton.title = "Toggle Theme";
-        themeToggleButton.id = "theme-toggle-btn";
+        themeToggleButton.id = "theme-toggle-btn"; // CSS will style this via its ID
 
-        // Event listener for theme toggling (themes array and logic remains the same)
-        let currentTheme = 1; // Default to Apple Dark or as per localStorage
+        let currentTheme = 1;
         const themes = [
             { // Light Theme (Apple Music Inspired)
                 '--bg-color': '#f8f8f8',
@@ -1953,7 +1948,19 @@
 
         document.body.appendChild(themeToggleButton);
         applyTheme(themes[currentTheme]); // Apply initial theme (saved or default Light)
+
         // Register Service Worker -- REMOVING THIS BLOCK
+        // if ('serviceWorker' in navigator) {
+        //     window.addEventListener('load', () => {
+        //         navigator.serviceWorker.register('sw.js', { scope: './' }) // Ensure sw.js is in the same directory and set scope
+        //             .then(registration => {
+        //                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        //             })
+        //             .catch(error => {
+        //                 console.log('ServiceWorker registration failed: ', error);
+        //             });
+        //     });
+        // }
     });
     </script>
 </body>
