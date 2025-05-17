@@ -1,11 +1,11 @@
 // sw.js - Service Worker for Sai Musik
 
-const CACHE_NAME = 'sai-musik-v1';
+const CACHE_NAME = 'sai-musik-v2';
 const ASSETS_TO_CACHE = [
-  '/', // root route
-  '/index.html',
-  '/default.png',
-  '/favicon.ico',
+  './', // root route
+  './index.html',
+  './default.png',
+  './favicon.ico',
   // CDNs - but better to cache local fallbacks
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js',
@@ -56,7 +56,7 @@ self.addEventListener('fetch', event => {
         .catch(() => {
           // Fallback when both cache & network fail
           if (event.request.destination === 'document') {
-            return caches.match('/index.html');
+            return caches.match('./index.html');
           }
         });
     })
