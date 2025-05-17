@@ -3985,7 +3985,7 @@
     </div>
     <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
+      navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('🎧 Sai Musik is now offline-ready!', reg))
         .catch(err => console.error('😱 Service Worker registration failed:', err));
     }
