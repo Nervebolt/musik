@@ -573,7 +573,7 @@
             .time { font-size: 0.7rem; width: 35px;}
             
             #theme-toggle-btn {
-                bottom: 15px; /* Adjust for potentially taller auto player bar */
+                bottom: 75px; /* Increased to clear OS nav bar */
                 right: 15px;
                 width: 38px; /* Slightly larger for easier tapping */
                 height: 38px;
@@ -1222,7 +1222,7 @@
             }
         }
 
-        loadTrack(idx, restoreTime = null, wasPlayingBeforeRestore = false) {
+        loadTrack(idx, restoreTime = null) {
             if(!this.playlist || !this.playlist.length || idx < 0 || idx >= this.playlist.length) {
                  console.warn("LoadTrack: Invalid index or empty playlist.", idx, this.playlist.length);
                 return;
@@ -1240,73 +1240,46 @@
             this.currentTimeEl.textContent='0:00';
             
             this.playlistEl.querySelectorAll('.playlist-item').forEach((el,i)=> {
-                const itemIndex = parseInt(el.dataset.index, 10); 
+                const itemIndex = parseInt(el.dataset.index, 10); // Ensure we compare numbers
                 el.classList.toggle('active', itemIndex === idx);
             });
 
-            this.updateMediaSession(); 
+            this.updateMediaSession(); // Update Media Session for the new track
 
-            const setInitialPlaybackStateUI = () => {
-                if (wasPlayingBeforeRestore) {
-                    this.isPlaying = true; // Set state internally
-                    this.playPauseBtn.innerHTML='<i class="fas fa-pause"></i>';
-                     if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing";
+            const startPlaybackIfNeeded = () => {
+                if (this.isPlaying) { 
+                    this.play(); // this.play() will also update media session state
                 } else {
-                    this.isPlaying = false;
-                    this.playPauseBtn.innerHTML='<i class="fas fa-play"></i>';
+                     // Ensure media session state is paused if not playing
                     if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused";
                 }
             };
     
             if (restoreTime !== null && restoreTime > 0) {
                 const onLoadedMetadata = () => {
-                    if (this.audio.seekable.length > 0) { 
+                    if (this.audio.seekable.length > 0) { // Check if audio is seekable
                          this.audio.currentTime = Math.min(restoreTime, this.audio.duration);
                     } else {
                         console.warn("Audio not seekable yet for restoring time.")
                     }
-                    this.updateProgress(); 
-                    setInitialPlaybackStateUI(); // Set UI based on restored isPlaying state
-                                            // but don't call this.play() automatically
+                    this.updateProgress(); // Update UI with restored time
+                    startPlaybackIfNeeded();
                 };
                 this.audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+                 // Fallback if loadedmetadata doesn't fire or seeking fails early
                 this.audio.addEventListener('canplay', () => {
                     if (this.audio.currentTime < restoreTime && this.audio.seekable.length > 0) {
                          this.audio.currentTime = Math.min(restoreTime, this.audio.duration);
                          this.updateProgress();
                     }
-                    setInitialPlaybackStateUI(); // Set UI, don't auto-play
+                    startPlaybackIfNeeded(); // Call here too ensure play state is correct
                 }, { once: true });
             } else {
-                // If not restoring time, it's a fresh load or next/prev track.
-                // If wasPlayingBeforeRestore is true (e.g. from init), set UI, but still don't auto-play from here.
-                // User interaction will call the actual play() method.
-                setInitialPlaybackStateUI(); 
-                if (this.isPlaying) { // if it was a fresh load AND isPlaying was true (e.g. from a prev session)
-                     // This case is tricky. For now, we set isPlaying to false if not restoring time from init.
-                     // Or, if this loadTrack call came from a next/prev action while already playing:
-                     if (!wasPlayingBeforeRestore) this.isPlaying = false; // Default to paused unless explicitly told it was playing
-                     // If it WAS playing (e.g. next track action), then this.play() will be called from nextTrack() method
-                }
+                startPlaybackIfNeeded();
             }
-             // If wasPlayingBeforeRestore is true, loadTrack was called from init.
-            // We have set this.isPlaying = true. The user will click play to start.
-            // If loadTrack is called from next/prev/playlist click, those methods will call play().
         }
 
         play() {
-            // First, ensure AudioContext is running (user gesture needed for this on first play)
-            if (this.audioContext.state === 'suspended') {
-                this.audioContext.resume().then(() => {
-                    console.log("AudioContext resumed successfully.");
-                    this._doPlay(); // Call the actual play logic
-                }).catch(e => console.error("Error resuming AudioContext:", e));
-            } else {
-                this._doPlay();
-            }
-        }
-
-        _doPlay() { // Renamed original play to _doPlay
             this.isPlaying=true; 
             this.playPauseBtn.innerHTML='<i class="fas fa-pause"></i>';
             if(this.audioContext.state==='suspended') this.audioContext.resume();
@@ -1332,7 +1305,6 @@
                 // Handle errors like user interaction needed
                 this.isPlaying = false; // Reset state if play fails
                 this.playPauseBtn.innerHTML='<i class="fas fa-play"></i>';
-                if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; // Update session state on error
             });
             if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing";
             this.savePlaybackState();
@@ -1897,8 +1869,6 @@
         const themeToggleButton = document.createElement('button');
         themeToggleButton.innerHTML = '<i class="fas fa-palette"></i>';
         themeToggleButton.style.position = 'fixed';
-        themeToggleButton.style.bottom = '20px';
-        themeToggleButton.style.right = '20px';
         themeToggleButton.style.padding = '10px';
         themeToggleButton.style.fontSize = '1.3rem';
         themeToggleButton.style.backgroundColor = 'var(--primary-elements)';
@@ -1987,18 +1957,18 @@
         document.body.appendChild(themeToggleButton);
         applyTheme(themes[currentTheme]); // Apply initial theme (saved or default Light)
 
-        // Register Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js', { scope: './' }) // Ensure sw.js is in the same directory and set scope
-                    .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('ServiceWorker registration failed: ', error);
-                    });
-            });
-        }
+        // Register Service Worker -- REMOVING THIS BLOCK
+        // if ('serviceWorker' in navigator) {
+        //     window.addEventListener('load', () => {
+        //         navigator.serviceWorker.register('sw.js', { scope: './' }) // Ensure sw.js is in the same directory and set scope
+        //             .then(registration => {
+        //                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        //             })
+        //             .catch(error => {
+        //                 console.log('ServiceWorker registration failed: ', error);
+        //             });
+        //     });
+        // }
     });
     </script>
 </body>
