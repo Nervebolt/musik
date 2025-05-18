@@ -1,0 +1,21 @@
+{
+  "name": "Sai Musik",
+  "short_name": "Musik",
+  "description": "Offline‑friendly music player built by you (yes, you!).",
+  "start_url": "./index.html",      // ← leading “./”
+  "display": "standalone",
+  "background_color": "#f8f8f8",
+  "theme_color": "#007aff",
+  "icons": [
+    {
+      "src": "./default.png",       // ← leading “./”
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./default.png",       // ← leading “./”
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
