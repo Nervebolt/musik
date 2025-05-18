@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
   './index.html',
   './default.png',
   './favicon.ico',
+  './manifest.json',
   // CDNs - but better to cache local fallbacks
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js',
