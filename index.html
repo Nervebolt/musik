@@ -492,7 +492,7 @@
         /* Responsive Adjustments */
         @media (max-width: 768px) { /* Tablet and larger mobile */
             :root {
-                 --system-navbar-space: 30px;
+                 --system-navbar-space: max(30px, env(safe-area-inset-bottom));
             }
             #app-container {
                 grid-template-columns: 1fr; 
@@ -582,7 +582,7 @@
             :root {
                 --sidebar-width: 100%; 
                 --player-bar-height: auto; 
-                /* --system-navbar-space: 60px; */ /* Space handled by body padding-bottom */
+                --system-navbar-space: max(40px, env(safe-area-inset-bottom)); /* Adjusted for safe area */
             }
              #sidebar {
                 padding-top: 10px;
@@ -1143,6 +1143,114 @@
             cursor: pointer;
             /* No absolute positioning needed if parent is flex and aligns it */
         }
+
+        /* Loader Modal Specifics */
+        #loader-modal .modal-content {
+            max-width: 350px; /* Smaller width for a loader */
+        }
+        #loader-modal-message {
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        .loader-progress-container {
+            width: 100%;
+            height: 10px; /* Slightly thicker bar for visibility */
+            background-color: var(--secondary-elements);
+            border-radius: 5px;
+            margin-bottom: 5px; /* Space before text */
+            overflow: hidden; /* Ensure progress bar stays within bounds */
+        }
+        .loader-progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--accent-color);
+            border-radius: 5px;
+            transition: width 0.2s ease-out; /* Smooth progress update */
+        }
+        #loader-progress-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .playlist-item.active .playlist-item-artist,
+        .playlist-item.active .playlist-item-number {
+            color: var(--selected-item-text);
+            opacity: 0.7; /* Mute them slightly in active state */
+        }
+
+        .playlist-item-number { /* This was the old selector, keeping for now if any JS relies on it, but visual part moved */
+            /* Styles for the number if it were standalone, now superseded by playing-icon-container logic */
+        }
+
+        .playing-icon-container {
+            margin-right: 10px;
+            width: 20px; /* Matches old number width */
+            text-align: right;
+            display: flex; /* To align items inside if needed, but primarily for sizing */
+            align-items: center;
+            justify-content: flex-end; /* Aligns content (number or icon) to the right */
+            flex-shrink: 0;
+        }
+
+        .playlist-item-number-display {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: inline-block; /* Or block, depending on alignment needs */
+        }
+
+        .playing-icon {
+            display: none; /* Hidden by default */
+            width: 100%; /* Take full width of container */
+            height: 12px; /* Height of the animation area */
+            justify-content: space-around; /* Evenly space the bars */
+            align-items: flex-end; /* Bars grow upwards */
+        }
+
+        .playing-bar {
+            width: 3px; /* Width of each bar */
+            height: 100%; /* Start at full height, animation will vary */
+            background-color: var(--accent-color); /* Use accent color */
+            border-radius: 1px;
+            animation-duration: 1.2s;
+            animation-iteration-count: infinite;
+            animation-timing-function: ease-in-out;
+        }
+
+        /* Individual bar animation delays */
+        .playing-bar.bar1 { animation-name: dance; animation-delay: 0s; }
+        .playing-bar.bar2 { animation-name: dance; animation-delay: 0.2s; }
+        .playing-bar.bar3 { animation-name: dance; animation-delay: 0.4s; }
+
+        /* Active and Playing State */
+        .playlist-item.active.is-playing .playing-icon-container .playlist-item-number-display {
+            display: none; /* Hide number */
+        }
+        .playlist-item.active.is-playing .playing-icon-container .playing-icon {
+            display: flex; /* Show animation icon */
+        }
+        /* When active but paused, we want the number to take accent color if the icon would */
+        .playlist-item.active .playing-icon-container .playlist-item-number-display {
+            color: var(--selected-item-text);
+            opacity: 0.7; /* Match other muted active elements */
+        }
+        .playlist-item.active.is-playing .playing-icon-container .playing-bar {
+             background-color: var(--selected-item-text); /* Ensure animation uses selected text color */
+        }
+
+
+        @keyframes dance {
+            0%, 100% { height: 20%; }
+            25% { height: 100%; }
+            50% { height: 40%; }
+            75% { height: 80%; }
+        }
+
+        .playlist-item-details {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* For text-overflow */
+        }
     </style>
 </head>
 <body>
@@ -1487,6 +1595,13 @@
             this.notificationModalTitleEl = document.getElementById('notification-modal-title');
             this.notificationModalMessageEl = document.getElementById('notification-modal-message');
             this.notificationModalOkBtn = document.getElementById('notification-modal-ok-btn');
+
+            // Loader Modal DOM elements
+            this.loaderModal = document.getElementById('loader-modal');
+            this.loaderModalTitleEl = document.getElementById('loader-modal-title');
+            this.loaderModalMessageEl = document.getElementById('loader-modal-message');
+            this.loaderProgressBarEl = document.getElementById('loader-progress-bar');
+            this.loaderProgressTextEl = document.getElementById('loader-progress-text');
 
             this.draggedItemIndex = null; 
             this.touchDragState = {
@@ -2121,21 +2236,34 @@
             const newTracksToProcess = [];
             const individualTracksFolderName = "Individual Tracks"; // Used for non-ZIP single file uploads
 
+            if (!fileList || fileList.length === 0) {
+                // this.openNotificationModal("No files selected.", "Info"); // User might click cancel
+                return;
+            }
+
+            this.showLoaderModal("Preparing files...", fileList.length);
+            let filesProcessedForLoader = 0;
+
             for (const file of Array.from(fileList)) {
                 if (file.type === 'application/zip' || (file.name && file.name.toLowerCase().endsWith('.zip'))) {
                     console.log(`Processing ZIP file: ${file.name}`);
-                    this.openNotificationModal(`Processing ZIP file: ${file.name}... please wait.`, "Processing");
+                    // this.openNotificationModal(`Processing ZIP file: ${file.name}... please wait.`, "Processing");
+                    this.updateLoaderModal(`Processing ZIP: ${file.name}`, filesProcessedForLoader, fileList.length, true);
                     try {
                         const jszip = new JSZip();
                         const zip = await jszip.loadAsync(file);
                         const zipFileName = file.name.replace(/\.zip$/i, ''); // Get ZIP name without .zip extension for base path
+                        const audioFilesInZip = Object.keys(zip.files).filter(relativePath => 
+                            !zip.files[relativePath].dir && relativePath.match(/\.(mp3|wav|ogg|aac|flac|m4a)$/i)
+                        );
+                        let processedInZipCount = 0;
 
-                        for (const relativePathInZip of Object.keys(zip.files)) {
+                        for (const relativePathInZip of audioFilesInZip) {
                             const zipEntry = zip.files[relativePathInZip];
-                            if (!zipEntry.dir) { // Process only files, not directories
+                            // if (!zipEntry.dir) { // Process only files, not directories - already filtered above
                                 const fileNameInZip = zipEntry.name.split('/').pop();
                                 // Basic audio file type check by extension (can be expanded)
-                                if (fileNameInZip.match(/\.(mp3|wav|ogg|aac|flac|m4a)$/i)) {
+                                // if (fileNameInZip.match(/\.(mp3|wav|ogg|aac|flac|m4a)$/i)) { // Already filtered
                                     const fileBlob = await zipEntry.async('blob');
                                     // Construct a File-like object for consistent processing
                                     const extractedFile = new File([fileBlob], fileNameInZip, { type: fileBlob.type });
@@ -2143,8 +2271,12 @@
                                     // Prepend ZIP file name to relative path to group tracks from the same ZIP
                                     const webkitRelativePath = `${zipFileName}/${zipEntry.name}`;
                                     newTracksToProcess.push({ file: extractedFile, webkitRelativePath });
-                                }
-                            }
+                                    processedInZipCount++;
+                                    // Update loader incrementally for files within ZIP
+                                    // This requires knowing total files in ZIP beforehand for accurate sub-progress
+                                    // For simplicity, we'll update the main loader progress after the ZIP is done.
+                                // }
+                            // }
                         }
                     } catch (error) {
                         console.error(`Error processing ZIP file ${file.name}:`, error);
@@ -2156,21 +2288,27 @@
                 } else {
                     console.warn("Skipping unsupported file type:", file.name, file.type);
                 }
+                filesProcessedForLoader++;
+                this.updateLoaderModal( filesProcessedForLoader === fileList.length ? "Finalizing..." : `Processing input ${filesProcessedForLoader}/${fileList.length}...`, filesProcessedForLoader, fileList.length);
             }
 
             if (newTracksToProcess.length === 0 && Array.from(fileList).some(f => f.type === 'application/zip')) {
                 // If only ZIPs were selected and no audio files were found inside them
+                this.hideLoaderModal();
                 this.openNotificationModal("No supported audio files found within the selected ZIP archive(s).", "Info");
                 return;
             } else if (newTracksToProcess.length === 0) {
                 console.warn("No audio or video files found in the selection, or no supported files in ZIP.");
-                // Optionally, show a notification if nothing usable was found at all
-                if(Array.from(fileList).length > 0) { // Only show if files were actually selected
+                this.hideLoaderModal();
+                if(Array.from(fileList).length > 0) { 
                     this.openNotificationModal("No supported audio files found in your selection.", "Info");
                 }
                 return;
             }
             
+            this.updateLoaderModal("Extracting metadata and saving tracks...", 0, newTracksToProcess.length, true); // Reset progress for the next stage
+            let tracksProcessedForLoader = 0;
+
             const newlyAddedPlaylistData = []; 
             let newTracksSavedToDBCount = 0;
 
@@ -2244,11 +2382,15 @@
                     file: URL.createObjectURL(fileForDB), // Create object URL from the File object intended for DB
                     cover: coverBlob ? URL.createObjectURL(coverBlob) : this.defaultCover
                 });
+                tracksProcessedForLoader++;
+                this.updateLoaderModal(`Processing track ${tracksProcessedForLoader}/${newTracksToProcess.length}...`, tracksProcessedForLoader, newTracksToProcess.length);
             }
+
+            this.hideLoaderModal(); // Hide loader after processing all tracks
 
             if (newTracksSavedToDBCount > 0) {
                 this.playlist.push(...newlyAddedPlaylistData);
-                this.renderPlaylist();
+            this.renderPlaylist();
 
                 if (!this.isPlaying && newlyAddedPlaylistData.length > 0) {
                     const firstNewTrackGlobalIndex = this.playlist.findIndex(pTrack => pTrack.id === newlyAddedPlaylistData[0].id);
@@ -2289,6 +2431,7 @@
             this.progressBar.style.width='0%';
             this.currentTimeEl.textContent='0:00';
             
+            this.updatePlaylistItemPlayingState(false); // Remove from old track first
             this.updateActivePlaylistItem(); // Explicitly update active item
 
             this.updateMediaSession();
@@ -2296,9 +2439,9 @@
 
             const startPlaybackIfNeeded = () => {
                 if (this.isPlaying) { 
-                    this.play(); // this.play() will also update media session state
+                    this.play(); // this.play() will also update media session state and is-playing class
                 } else {
-                     // Ensure media session state is paused if not playing
+                    this.updatePlaylistItemPlayingState(false); // Ensure is-playing is not on new track if paused
                     if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused";
                 }
             };
@@ -2336,18 +2479,16 @@
             this.isPlaying=true; 
             this.playPauseBtn.innerHTML='<i class="fas fa-pause"></i>';
             if(this.audioContext.state==='suspended') this.audioContext.resume();
-            if(!this.audioSource && this.audio.src){ // Ensure src is set before creating source
+            if(!this.audioSource && this.audio.src){ 
                 try {
                 this.audioSource = this.audioContext.createMediaElementSource(this.audio);
                 this.audioSource.connect(this.analyser);
                 } catch(e) {
                     console.error("Error creating media element source:", e);
-                     // Fallback or reset if audio element is not ready
-                    if (this.audio.readyState === 0 && this.playlist[this.currentTrack]) { // HAVE_NOTHING
+                    if (this.audio.readyState === 0 && this.playlist[this.currentTrack]) { 
                         console.warn("Audio source not ready, attempting to reload track data.");
                         this.audio.src = this.playlist[this.currentTrack].file;
                         this.audio.load();
-                        // Defer play call until canplay or similar event
                         this.audio.addEventListener('canplay', () => this.play(), {once: true});
                         return; 
                     }
@@ -2355,11 +2496,11 @@
             }
             this.audio.play().catch(error => {
                 console.error("Error playing audio:", error);
-                // Handle errors like user interaction needed
-                this.isPlaying = false; // Reset state if play fails
+                this.isPlaying = false; 
                 this.playPauseBtn.innerHTML='<i class="fas fa-play"></i>';
             });
             if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing";
+            this.updatePlaylistItemPlayingState(true); // Add is-playing class
             this.savePlaybackState();
         }
         pause(){
@@ -2368,6 +2509,7 @@
             this.audio.pause(); 
             this.restartedTrack = false; 
             if (!this.isScrubbing && navigator.mediaSession) navigator.mediaSession.playbackState = "paused";
+            this.updatePlaylistItemPlayingState(false); // Remove is-playing class
             this.savePlaybackState();
         }
         togglePlay(){ 
@@ -2750,8 +2892,20 @@
             const heartIconClass = track.liked ? 'fas fa-heart' : 'far fa-heart';
             const displayNumber = localIndexInGroup + 1;
 
+            // Container for number and playing icon
+            const playingIconHTML = `
+                <div class="playing-icon-container">
+                    <span class="playlist-item-number-display">${displayNumber}</span>
+                    <div class="playing-icon">
+                        <span class="playing-bar bar1"></span>
+                        <span class="playing-bar bar2"></span>
+                        <span class="playing-bar bar3"></span>
+                    </div>
+                </div>
+            `;
+
             item.innerHTML = `
-                <div class="playlist-item-number">${displayNumber}</div>
+                ${playingIconHTML}
                 <img src="${track.cover || this.defaultCover}" class="playlist-item-cover" alt="C" />
                     <div class="playlist-item-details">
                     <div class="playlist-item-title">${displayTitle}</div>
@@ -2782,6 +2936,12 @@
                 e.stopPropagation();
                 this.confirmAndDeleteTrack(track.id, track.title); // Correct function call
             });
+
+            // Remove the old playlist-item-number div if it exists from previous structure (defensive)
+            const oldNumEl = item.querySelector('.playlist-item-number');
+            if (oldNumEl && oldNumEl.parentElement === item) {
+                item.removeChild(oldNumEl);
+            }
 
             item.addEventListener('click', () => {
                 this.setPlaybackContext(contextName, contextTracksArr, track.id);
@@ -3813,6 +3973,72 @@
             this.savePlaybackState();
         }
         // --- End New Volume Control Methods ---
+
+        // --- Loader Modal Methods ---
+        showLoaderModal(message = "Processing...", totalItems = 0) {
+            if (this.loaderModal) {
+                if (this.loaderModalTitleEl) this.loaderModalTitleEl.textContent = "Processing Files"; // Generic title
+                if (this.loaderModalMessageEl) this.loaderModalMessageEl.textContent = message;
+                if (this.loaderProgressBarEl) this.loaderProgressBarEl.style.width = '0%';
+                if (this.loaderProgressTextEl) this.loaderProgressTextEl.textContent = `0 / ${totalItems}`;
+                
+                this.loaderModal.style.display = 'flex';
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        this.loaderModal.classList.add('modal-visible');
+                    });
+                });
+            }
+        }
+
+        updateLoaderModal(message, processedItems, totalItems, isIndeterminate = false) {
+            if (this.loaderModal && this.loaderModal.classList.contains('modal-visible')) {
+                if (this.loaderModalMessageEl) this.loaderModalMessageEl.textContent = message;
+                if (this.loaderProgressBarEl) {
+                    if (isIndeterminate) {
+                        this.loaderProgressBarEl.style.width = '100%'; // Or some other indeterminate animation/style
+                        // Optionally, you could add a class for a specific indeterminate animation
+                    } else {
+                        const percentage = totalItems > 0 ? (processedItems / totalItems) * 100 : 0;
+                        this.loaderProgressBarEl.style.width = `${percentage}%`;
+                    }
+                }
+                if (this.loaderProgressTextEl) {
+                    if (isIndeterminate) {
+                         this.loaderProgressTextEl.textContent = "Processing...";
+                    } else {
+                        this.loaderProgressTextEl.textContent = `${processedItems} / ${totalItems}`;
+                    }
+                }
+            }
+        }
+
+        hideLoaderModal() {
+            if (this.loaderModal) {
+                this.loaderModal.classList.remove('modal-visible');
+                setTimeout(() => {
+                    this.loaderModal.style.display = 'none';
+                    // Reset progress bar for next time
+                    if (this.loaderProgressBarEl) this.loaderProgressBarEl.style.width = '0%';
+                    if (this.loaderProgressTextEl) this.loaderProgressTextEl.textContent = "0 / 0";
+                }, 300); // Match CSS transition time
+            }
+        }
+        // --- End Loader Modal Methods ---
+
+        updatePlaylistItemPlayingState(isPlaying) {
+            this.playlistEl.querySelectorAll('.playlist-item.is-playing').forEach(item => {
+                item.classList.remove('is-playing');
+            });
+
+            if (isPlaying && this.playlist && this.playlist[this.currentTrack]) {
+                const currentTrackId = this.playlist[this.currentTrack].id;
+                const currentItemEl = this.playlistEl.querySelector(`.playlist-item[data-track-id="${currentTrackId}"]`);
+                if (currentItemEl) {
+                    currentItemEl.classList.add('is-playing');
+                }
+            }
+        }
     }
 
     class Visualizer {
@@ -4082,42 +4308,40 @@
         const player = new MusicPlayer();
         new Visualizer(player);
 
-        // const themeToggleButton = document.createElement('button'); // REMOVING DYNAMIC CREATION
-        // themeToggleButton.innerHTML = '<i class="fas fa-palette"></i>';
-        // themeToggleButton.title = "Toggle Theme";
-        // themeToggleButton.id = "theme-toggle-btn"; 
-        const themeToggleButton = document.getElementById('theme-toggle-btn'); // GETTING STATIC BUTTON
+        const themeToggleButton = document.getElementById('theme-toggle-btn');
         
-        let currentTheme = 1;
+        let currentTheme = 3; // Default to Dark Theme (index 1)
         const themes = [
-            { // Light Theme (Apple Music Inspired)
+            { // 0: Light Theme (Apple Music Inspired)
                 '--bg-color': '#f8f8f8',
                 '--primary-elements': '#ffffff',
                 '--secondary-elements': '#e8e8e8',
                 '--text-color': '#333333',
                 '--text-muted': '#777777',
-                '--accent-color': '#007aff', // Apple Blue
+                '--accent-color': '#007aff', 
                 '--hover-accent': '#005ecb',
                 '--button-text': '#333333',
                 '--border-main': '#d1d1d1',
+                '--border-light': '#e0e0e0',
                 '--border-radius-main': '8px',
                 '--border-radius-small': '6px',
-                '--player-bar-bg': 'rgba(240, 240, 240, 0.85)', // Slightly transparent for player bar
+                '--player-bar-bg': 'rgba(240, 240, 240, 0.85)',
                 '--sidebar-bg': '#f0f0f0',
                 '--selected-item-bg': 'rgba(0, 122, 255, 0.1)',
                 '--selected-item-text': '#007aff',
                 '--shadow-color': 'rgba(0, 0, 0, 0.1)'
             },
-            { // Dark Theme (Apple Music Dark Mode Inspired)
+            { // 1: Dark Theme (Apple Music Dark Mode Inspired) - DEFAULT
                 '--bg-color': '#1c1c1e',
                 '--primary-elements': '#2c2c2e',
                 '--secondary-elements': '#3a3a3c',
                 '--text-color': '#ffffff',
                 '--text-muted': '#8e8e93',
-                '--accent-color': '#0a84ff', // Apple Blue (Dark Mode)
+                '--accent-color': '#0a84ff', 
                 '--hover-accent': '#0060df',
                 '--button-text': '#ffffff',
                 '--border-main': '#38383a',
+                '--border-light': '#48484a', /* Slightly lighter border for dark mode */
                 '--border-radius-main': '8px',
                 '--border-radius-small': '6px',
                 '--player-bar-bg': 'rgba(36, 36, 38, 0.85)',
@@ -4126,7 +4350,7 @@
                 '--selected-item-text': '#0a84ff',
                 '--shadow-color': 'rgba(0, 0, 0, 0.3)'
             },
-            { // Original Synthwave (Kept for variety)
+            { // 2: Original Synthwave (Kept for variety)
                 '--bg-color': '#0d0221',
                 '--primary-elements': '#240046',
                 '--secondary-elements': '#3c096c',
@@ -4134,7 +4358,35 @@
                 '--text-muted': '#a0a0a0',
                 '--accent-color': '#ff00e0',
                 '--hover-accent': '#c000a0',
-                '--button-text': '#e0e0e0'
+                '--button-text': '#e0e0e0',
+                '--border-main': '#58187A',
+                '--border-light': '#4A0F6A',
+                '--border-radius-main': '8px',
+                '--border-radius-small': '6px',
+                '--player-bar-bg': 'rgba(20, 2, 35, 0.85)',
+                '--sidebar-bg': '#1A022F',
+                '--selected-item-bg': 'rgba(255, 0, 224, 0.15)',
+                '--selected-item-text': '#ff00e0',
+                '--shadow-color': 'rgba(0, 0, 0, 0.4)'
+            },
+            { // 3: Party Theme!
+                '--bg-color': '#111111', /* Very dark background */
+                '--primary-elements': '#222222', /* Dark elements */
+                '--secondary-elements': '#333333', /* Slightly lighter dark */
+                '--text-color': '#ffffff', /* Bright white text */
+                '--text-muted': '#bbbbbb', /* Bright muted text */
+                '--accent-color': '#00f2ea', /* Neon Cyan/Teal */
+                '--hover-accent': '#00c1b8', /* Darker Neon Cyan/Teal */
+                '--button-text': '#ffffff',
+                '--border-main': '#444444', /* Dark borders */
+                '--border-light': '#555555',
+                '--border-radius-main': '10px', /* More rounded for fun */
+                '--border-radius-small': '7px',
+                '--player-bar-bg': 'rgba(10, 10, 10, 0.9)', /* Almost opaque dark bar */
+                '--sidebar-bg': '#181818', /* Dark sidebar */
+                '--selected-item-bg': 'rgba(0, 242, 234, 0.25)', /* Neon selection */
+                '--selected-item-text': '#00f2ea',
+                '--shadow-color': 'rgba(0, 242, 234, 0.3)' /* Neon shadow */
             }
         ];
 
@@ -4144,43 +4396,17 @@
             }
         }
 
-        themeToggleButton.addEventListener('click', () => {
-            currentTheme = (currentTheme + 1) % themes.length;
-            applyTheme(themes[currentTheme]);
-            localStorage.setItem('musicPlayerTheme', currentTheme);
-        });
-
-        const savedTheme = localStorage.getItem('musicPlayerTheme');
-        if (savedTheme !== null) {
-            currentTheme = parseInt(savedTheme, 10);
-        } else {
-            currentTheme = 1; // Default to the second theme (Apple Dark)
-        }
-
-        // document.body.appendChild(themeToggleButton); // REMOVING DYNAMIC APPEND
-        if (themeToggleButton) { // Check if button exists before adding listener
-            applyTheme(themes[currentTheme]); // Apply initial theme (saved or default Light)
+        if (themeToggleButton) {
+            applyTheme(themes[currentTheme]); // Apply initial theme (now always dark by default)
             themeToggleButton.addEventListener('click', () => {
                 currentTheme = (currentTheme + 1) % themes.length;
                 applyTheme(themes[currentTheme]);
-                localStorage.setItem('musicPlayerTheme', currentTheme);
+                // REMOVED: localStorage.setItem('musicPlayerTheme', currentTheme);
             });
         } else {
             console.warn("Theme toggle button not found in the player bar.");
         }
 
-        // Register Service Worker -- REMOVING THIS BLOCK
-        // if ('serviceWorker' in navigator) {
-        //     window.addEventListener('load', () => {
-        //         navigator.serviceWorker.register('sw.js', { scope: './' }) // Ensure sw.js is in the same directory and set scope
-        //             .then(registration => {
-        //                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        //             })
-        //             .catch(error => {
-        //                 console.log('ServiceWorker registration failed: ', error);
-        //             });
-        //     });
-        // }
     });
     </script>
 
@@ -4232,6 +4458,18 @@
             <div class="modal-actions" style="justify-content: center;"> <!-- Center the OK button -->
                 <button id="notification-modal-ok-btn" class="modal-button">OK</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Loader Modal HTML -->
+    <div id="loader-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="loader-modal-title">Processing Files...</h3>
+            <p id="loader-modal-message">Please wait while your music is being prepared.</p>
+            <div class="loader-progress-container">
+                <div class="loader-progress-bar" id="loader-progress-bar"></div>
+            </div>
+            <p id="loader-progress-text" style="text-align: center; margin-top: 10px;">0 / 0</p>
         </div>
     </div>
     <script>
