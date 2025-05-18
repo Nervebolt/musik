@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sai Musik</title>
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> <!-- Added JSZip -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#007aff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
@@ -494,7 +493,7 @@
         /* Responsive Adjustments */
         @media (max-width: 768px) { /* Tablet and larger mobile */
             :root {
-                 --system-navbar-space: max(40px, env(safe-area-inset-bottom)); /* Increased fallback */
+                 --system-navbar-space: max(30px, env(safe-area-inset-bottom));
             }
             #app-container {
                 grid-template-columns: 1fr; 
@@ -584,7 +583,7 @@
             :root {
                 --sidebar-width: 100%; 
                 --player-bar-height: auto; 
-                --system-navbar-space: max(50px, env(safe-area-inset-bottom)); /* Increased fallback */
+                --system-navbar-space: max(40px, env(safe-area-inset-bottom)); /* Adjusted for safe area */
             }
              #sidebar {
                 padding-top: 10px;

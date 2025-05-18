@@ -1,12 +1,11 @@
 // sw.js - Service Worker for Sai Musik
 
-const CACHE_NAME = 'sai-musik-v3.7';
+const CACHE_NAME = 'sai-musik-v3.6';
 const ASSETS_TO_CACHE = [
   './', // root route
   './index.html',
   './default.png',
   './favicon.ico',
-  './manifest.json',
   // CDNs - but better to cache local fallbacks
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js',
