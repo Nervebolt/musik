@@ -1091,93 +1091,69 @@
         }
 
         /* Playlist Item Actions Menu (Three-dot menu) */
-        .playlist-item-actions-container {
-            position: relative; /* For positioning the dropdown */
-            margin-left: auto; /* Pushes it to the right, replacing individual buttons */
-        }
-
-        .actions-menu-btn {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 1rem; /* Slightly larger for easier tap */
-            padding: 8px; /* Make tap area larger */
-            cursor: pointer;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
+        .playlist-item {
             display: flex;
             align-items: center;
-            justify-content: center;
-        }
-        .actions-menu-btn:hover {
-            background-color: var(--secondary-elements);
-            color: var(--accent-color);
-        }
-
-        .actions-dropdown {
-            position: absolute;
-            right: 0;
-            top: calc(100% + 5px); /* Position below the button */
-            background-color: var(--primary-elements);
-            border: 1px solid var(--border-main);
-            border-radius: var(--border-radius-small);
-            box-shadow: 0 4px 12px var(--shadow-color);
-            z-index: 100; /* Increased z-index to help with overlap */
-            width: max-content; /* Auto width based on content */
-            padding: 5px 0;
-            /* display: none;  Replaced by opacity/visibility for animation */
-            opacity: 0;
-            visibility: hidden;
-            /* transform: translateY(-5px) scale(0.95); */ /* Temporarily remove transform for testing mobile transparency */
-            /* transform-origin: top right; */ /* Temporarily remove transform-origin */
-            transition: opacity 0.15s ease-out, /* transform 0.15s ease-out, */ visibility 0s linear 0.15s;
-            flex-direction: column;
+            /* padding: 10px 20px; */ /* Keep your existing padding */
+            /* cursor: pointer; */ /* Keep existing */
+            /* transition: background-color 0.15s ease, color 0.15s ease; */ /* Keep existing */
+            /* border-bottom: 1px solid var(--border-light); */ /* Keep existing */
+            position: relative; /* Added for potential future use, if not already present */
         }
 
-        .actions-dropdown.visible {
-            /* display: flex; Replaced by opacity/visibility for animation */
-            opacity: 1;
-            visibility: visible;
-            /* transform: translateY(0) scale(1); */ /* Temporarily remove transform */
-            transition-delay: 0s, 0s, 0s; /* visibility transition immediately on show */
-            z-index: 1010; /* Even higher z-index for visible dropdown */
-            /* Attempt to force a new rendering layer on mobile to fix transparency */
-            /* -webkit-transform: translateZ(0); */ /* Removing as it's a transform and didn't fix it */
-            /* transform: translateZ(0); */ /* Removing as it's a transform and didn't fix it */
+        .playlist-item-details {
+            /* display: flex; */ /* Keep existing if any */
+            /* flex-direction: column; */ /* Keep existing */
+            /* overflow: hidden; */ /* Keep existing */
+            flex-grow: 1; /* Allows this section to take available space */
+            margin-right: 8px; /* Adds a small space before the action buttons */
         }
 
-        .actions-dropdown-item {
+        .playlist-item-direct-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px; /* Adjust the gap between buttons as needed */
+            flex-shrink: 0; /* Prevent action buttons from shrinking */
+        }
+
+        .direct-action-btn {
             background: none;
             border: none;
-            color: var(--text-color);
-            padding: 8px 15px;
-            text-align: left;
-            cursor: pointer;
-            display: flex; /* Ensures full width clickable area and aligns icon/text */
-            align-items: center;
-            font-size: 0.9rem;
-            white-space: nowrap;
-            width: 100%; /* Make button take full width of dropdown */
-        }
-        .actions-dropdown-item i {
-            margin-right: 10px;
-            width: 16px; /* Align icons */
             color: var(--text-muted);
+            font-size: 0.85rem; /* Adjust for desired icon size */
+            padding: 6px;      /* Adjust padding for comfortable tap area */
+            cursor: pointer;
+            border-radius: 50%; /* Optional: makes the button background circular on hover */
+            width: 28px;        /* Fixed width for consistency */
+            height: 28px;       /* Fixed height for consistency */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s ease, background-color 0.2s ease;
         }
 
-        .actions-dropdown-item:hover {
-            background-color: var(--secondary-elements);
+        .direct-action-btn:hover {
+            color: var(--accent-color);
+            background-color: var(--secondary-elements); /* Optional: slight background on hover */
+        }
+
+        /* Style for the liked (solid heart) state */
+        .direct-action-btn.like-btn-direct .fa-heart.fas {
             color: var(--accent-color);
         }
-        .actions-dropdown-item:hover i {
-            color: var(--accent-color);
+
+        /* Specific hover for delete button (destructive action color) */
+        .direct-action-btn.remove-track-btn-direct:hover {
+            color: #ff3b30; /* Apple's destructive red */
         }
-        .actions-dropdown-item.delete-action:hover {
-            color: #ff3b30; /* Destructive color for delete hover */
+        .direct-action-btn.remove-track-btn-direct:hover i { /* Ensure icon also takes the color */
+            color: #ff3b30;
         }
-        .actions-dropdown-item.delete-action:hover i {
-             color: #ff3b30;
+
+
+        /* Hide direct actions if item is hidden by search (if not already covered) */
+        .playlist-item.hidden-by-search .playlist-item-direct-actions {
+            display: none;
         }
 
         /* Styles for folder group delete button */
@@ -1469,7 +1445,7 @@
     </div>
 
     <!-- <input type="file" id="folderPicker" multiple style="display:none" accept="audio/*,video/*"> --> <!-- Old input -->
-    <input type="file" id="filesPicker" multiple style="display:none" accept=".mp3,.zip"> <!-- For individual/multiple mp3 files AND ZIP files -->
+    <input type="file" id="filesPicker" multiple style="display:none" accept=".mp3,.zip,.m4a"> <!-- For individual/multiple mp3 files AND ZIP files -->
     <input type="file" id="trueFolderPicker" multiple style="display:none" webkitdirectory directory accept="audio/*,video/*"> <!-- For folder selection -->
 
     <div class="playlist-container" id="playlist-container" style="display: none;">
@@ -3055,20 +3031,20 @@
         }
 
         createPlaylistItem(track, localIndexInGroup, contextName, contextTracksArr) {
-                const item = document.createElement('div');
+            const item = document.createElement('div');
             const globalTrackIndex = this.playlist.findIndex(pTrack => pTrack.id === track.id);
 
             item.className = 'playlist-item';
             if (globalTrackIndex === this.currentTrack) {
                 item.classList.add('active');
             }
-            item.dataset.index = globalTrackIndex; 
-            item.dataset.trackId = track.id; 
+            item.dataset.index = globalTrackIndex;
+            item.dataset.trackId = track.id;
             item.draggable = true;
 
             const displayTitle = this.truncateText(track.title);
             const displayArtist = this.truncateText(track.artist || 'Unknown Artist');
-            const heartIconClass = track.liked ? 'fas fa-heart' : 'far fa-heart';
+            const heartIconClass = track.liked ? 'fas fa-heart' : 'far fa-heart'; // Solid or regular heart
             const displayNumber = localIndexInGroup + 1;
 
             // Container for number and playing icon
@@ -3083,75 +3059,57 @@
                 </div>
             `;
 
+            // --- MODIFIED HTML STRUCTURE ---
             item.innerHTML = `
                 ${playingIconHTML}
                 <img src="${track.cover || this.defaultCover}" class="playlist-item-cover" alt="C" />
-                    <div class="playlist-item-details">
+                <div class="playlist-item-details">
                     <div class="playlist-item-title">${displayTitle}</div>
                     <div class="playlist-item-artist">${displayArtist}</div>
                 </div>
-                <div class="playlist-item-actions-container">
-                    <button class="actions-menu-btn" title="More actions">
-                        <i class="fas fa-ellipsis-v"></i>
+                <div class="playlist-item-direct-actions">
+                    <button class="direct-action-btn like-btn-direct" title="${track.liked ? 'Unlike' : 'Like'}">
+                        <i class="${heartIconClass}"></i>
                     </button>
-                    <div class="actions-dropdown">
-                        <button class="actions-dropdown-item like-action">
-                            <i class="${heartIconClass}"></i> ${track.liked ? 'Unlike' : 'Like'}
-                        </button>
-                        <button class="actions-dropdown-item add-to-queue-action">
-                            <i class="fas fa-layer-group"></i> Play Next
-                        </button>
-                        <button class="actions-dropdown-item add-to-playlist-action">
-                            <i class="fas fa-plus-square"></i> Add to Playlist
-                        </button>
-                        <button class="actions-dropdown-item delete-action remove-track-action">
-                            <i class="fas fa-trash"></i> Delete from Library
-                        </button>
-                    </div>
-                    </div>
-                `;
+                    <button class="direct-action-btn add-to-queue-btn-direct" title="Play Next">
+                        <i class="fas fa-layer-group"></i>
+                    </button>
+                    <button class="direct-action-btn add-to-playlist-btn-direct" title="Add to Playlist">
+                        <i class="fas fa-plus-square"></i>
+                    </button>
+                    <button class="direct-action-btn remove-track-btn-direct" title="Delete from Library">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            // --- END OF MODIFIED HTML STRUCTURE ---
 
-            // Event listener for the new actions menu button
-            const actionsMenuBtn = item.querySelector('.actions-menu-btn');
-            const actionsDropdown = item.querySelector('.actions-dropdown');
+            // --- REMOVE OLD EVENT LISTENERS FOR DROPDOWN ---
+            // const actionsMenuBtn = item.querySelector('.actions-menu-btn'); // No longer exists
+            // const actionsDropdown = item.querySelector('.actions-dropdown'); // No longer exists
+            // ... (remove related listener attachment logic)
 
-            if (actionsMenuBtn && actionsDropdown) {
-                actionsMenuBtn.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent item click event
-                    // Close other open dropdowns
-                    document.querySelectorAll('.actions-dropdown.visible').forEach(openDropdown => {
-                        if (openDropdown !== actionsDropdown) {
-                            openDropdown.classList.remove('visible');
-                        }
-                    });
-                    actionsDropdown.classList.toggle('visible');
-                });
-            }
-
-            // Add event listeners for actions within the dropdown
-            item.querySelector('.like-action').addEventListener('click', (e) => {
-                e.stopPropagation();
+            // --- ADD NEW DIRECT EVENT LISTENERS ---
+            item.querySelector('.like-btn-direct').addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent item click (play track)
                 this.toggleLikeStatus(track.id);
-                actionsDropdown.classList.remove('visible'); // Close dropdown after action
             });
 
-            item.querySelector('.add-to-queue-action').addEventListener('click', (e) => {
+            item.querySelector('.add-to-queue-btn-direct').addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.addToQueue(track.id);
-                actionsDropdown.classList.remove('visible');
             });
 
-            item.querySelector('.add-to-playlist-action').addEventListener('click', (e) => {
+            item.querySelector('.add-to-playlist-btn-direct').addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.openAddToPlaylistModal(track.id);
-                actionsDropdown.classList.remove('visible');
             });
 
-            item.querySelector('.remove-track-action').addEventListener('click', (e) => {
+            item.querySelector('.remove-track-btn-direct').addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.confirmAndDeleteTrack(track.id, track.title);
-                actionsDropdown.classList.remove('visible');
             });
+            // --- END OF NEW DIRECT EVENT LISTENERS ---
 
             item.addEventListener('click', () => {
                 this.setPlaybackContext(contextName, contextTracksArr, track.id);
@@ -3183,7 +3141,7 @@
                 
                 // Trigger animation if the song is now liked
                 if (track.liked) {
-                    const playlistItemEl = this.playlistEl.querySelector(`.playlist-item[data-track-id="${track.id}"] .like-btn`);
+                    const playlistItemEl = this.playlistEl.querySelector(`.playlist-item[data-track-id="${track.id}"] .like-btn-direct`);
                     if (playlistItemEl) {
                         playlistItemEl.classList.add('heart-animating');
                         setTimeout(() => playlistItemEl.classList.remove('heart-animating'), 500); // Duration of animation
