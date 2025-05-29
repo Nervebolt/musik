@@ -1668,13 +1668,13 @@ body {
 /* Expanded Player View */
 @keyframes gradientShift {
     0% {
-        background-position: 0% 50%;
+      background-position: 0% 50%;
     }
     50% {
-        background-position: 100% 50%;
+      background-position: 100% 50%;
     }
     100% {
-        background-position: 0% 50%;
+      background-position: 0% 50%;
     }
 }
 
@@ -1709,6 +1709,7 @@ body {
     transition: all 0.5s ease;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+    box-shadow: inset 0 0 80px rgba(0, 100, 255, 0.1);
 }
 
 .expanded-player::before {
@@ -2907,5 +2908,23 @@ body:has(.expanded-player.active) .sidebar-toggle {
     }
 }
 
-
+@media (max-width: 380px) {
+    .expanded-player .control-btn:not(#expanded-play-pause-btn):not(#expanded-prev-btn):not(#expanded-next-btn) {
+      display: none !important;
+    }
+  
+    .expanded-player .album-art-large {
+      width: 210px;
+      height: 210px;
+    }
+  
+    .expanded-player .song-title {
+      font-size: 20px;
+    }
+  
+    .expanded-player .artist-name {
+      font-size: 14px;
+    }
+}
+  
   
