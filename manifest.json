@@ -1,7 +1,7 @@
 {
   "name": "Sai Musik",
   "short_name": "SaiMusik",
-  "description": "Offline first music player by Sai",
+  "description": "Offline music player packed with many features by Sai",
   "id": "/musik/index.html",
   "start_url": "./index.html",
   "display": "standalone",
