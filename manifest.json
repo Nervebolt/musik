@@ -1,12 +1,12 @@
 {
   "name": "Sai Musik",
   "short_name": "SaiMusik",
-  "description": "Offline music player packed with many features by Sai",
+  "description": "🎧 Premium Offline-Ready Music Player with Visuals, Playlists, and Smooth UX",
   "id": "/musik/index.html",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#1c1c1e",
-  "theme_color": "#0a84ff",
+  "background_color": "#f8f8f8",
+  "theme_color": "#007aff",
   "icons": [
     {
       "src": "icons/icon-192x192.png",
