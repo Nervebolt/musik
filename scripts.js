@@ -3266,7 +3266,13 @@ class MusicPlayer {
                 this.durationEl.textContent = "0:00";
                 this.progressBar.style.width = "0%";
                 this.playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-                if (navigator.mediaSession) navigator.mediaSession.playbackState = "none";
+                if (navigator.mediaSession) {
+                    if (this.playlist.length === 0) {
+                        navigator.mediaSession.playbackState = "none";
+                    } else {
+                        navigator.mediaSession.playbackState = "paused";
+                    }
+                }
                 // If there are other tracks, maybe load next or first? For now, just stop.
                 // currentTrack index might need adjustment if trackIndexInPlaylist < this.currentTrack
             }
@@ -3404,7 +3410,13 @@ class MusicPlayer {
                 this.durationEl.textContent = "0:00";
                 this.progressBar.style.width = "0%";
                 this.playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-                if (navigator.mediaSession) navigator.mediaSession.playbackState = "none";
+                if (navigator.mediaSession) {
+                    if (this.playlist.length === 0) {
+                        navigator.mediaSession.playbackState = "none";
+                    } else {
+                        navigator.mediaSession.playbackState = "paused";
+                    }
+                }
 
                 if (this.playlist.length > 0) {
                     this.currentTrack = Math.min(originalCurrentTrackIndex, this.playlist.length - 1);
@@ -3432,7 +3444,13 @@ class MusicPlayer {
                     this.durationEl.textContent = "0:00";
                     this.progressBar.style.width = "0%";
                     this.playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-                    if (navigator.mediaSession) navigator.mediaSession.playbackState = "none";
+                    if (navigator.mediaSession) {
+                        if (this.playlist.length === 0) {
+                            navigator.mediaSession.playbackState = "none";
+                        } else {
+                            navigator.mediaSession.playbackState = "paused";
+                        }
+                    }
                 }
             }
 
@@ -3546,21 +3564,6 @@ class MusicPlayer {
             }, 300); // Match CSS transition time
         }
     }
-    // --- End Loader Modal Methods ---
-
-    // updatePlaylistItemPlayingState(isPlaying) { // OBSOLETE
-    //     this.playlistEl.querySelectorAll('.playlist-item.is-playing').forEach(item => {
-    //         item.classList.remove('is-playing');
-    //     });
-
-    //     if (isPlaying && this.playlist && this.playlist[this.currentTrack]) {
-    //         const currentTrackId = this.playlist[this.currentTrack].id;
-    //         const currentItemEl = this.playlistEl.querySelector(`.playlist-item[data-track-id="${currentTrackId}"]`);
-    //         if (currentItemEl) {
-    //             currentItemEl.classList.add('is-playing');
-    //         }
-    //     }
-    // }
 
     async updateActiveContextTracksAfterReorder() {
         if (!this.activeContextName || !this.playlist || this.playlist.length === 0) {
@@ -3610,14 +3613,28 @@ class MusicPlayer {
             if (this.playQueue.length === 0 || this.playQueue[this.playQueue.length -1].id !== trackId) {
                 this.playQueue.push(track);
                 console.log(`Added to queue: ${track.title}`, this.playQueue.map(t=>t.title));
-                // Optionally, show a notification
-                this.openNotificationModal(`'${this.truncateText(track.title, 25)}' added to Play Next queue.`, "Queued");
+                // Show custom queue notification bar
+                this.showQueueNotificationBar();
             } else if (this.playQueue[this.playQueue.length -1].id === trackId) {
-                    this.openNotificationModal(`'${this.truncateText(track.title, 25)}' is already next in queue.`, "Info");
+                // Optionally, show a different message or do nothing
+                this.showQueueNotificationBar("Already next in queue");
             }
         } else {
             console.warn("Track ID not found in playlist to add to queue:", trackId);
         }
+    }
+
+    showQueueNotificationBar(message = "Added to queue") {
+        const bar = document.getElementById('queue-notification-bar');
+        if (!bar) return;
+        bar.textContent = message;
+        bar.classList.add('visible');
+        bar.style.display = 'block';
+        clearTimeout(this._queueNotificationTimeout);
+        this._queueNotificationTimeout = setTimeout(() => {
+            bar.classList.remove('visible');
+            setTimeout(() => { bar.style.display = 'none'; }, 300);
+        }, 2500);
     }
 
     playNextFromQueue() {
@@ -3856,7 +3873,7 @@ class MusicPlayer {
                 queueBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     this.addToQueue(track.id);
-                    this.openNotificationModal('Added to Queue', `"${track.title}" has been added to the queue`);
+                    this.showQueueNotificationBar();
                 });
                 
                 // Like button
@@ -4479,3 +4496,107 @@ window.addEventListener('load', ()=>{
         }
     }
 });
+
+// Mobile back button handling for expanded player and sidebar
+(function() {
+  // Helper to detect mobile
+  function isMobile() {
+    return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  // Elements
+  var expandedPlayer = document.getElementById('expanded-player');
+  var sidebar = document.getElementById('sidebar');
+  var sidebarOverlay = document.querySelector('.sidebar-overlay');
+
+  // State stack management
+  function isExpandedPlayerActive() {
+    return expandedPlayer && expandedPlayer.classList.contains('active');
+  }
+  function isSidebarActive() {
+    return sidebar && sidebar.classList.contains('active');
+  }
+
+  // Push a new state if needed
+  function pushStateIfNeeded() {
+    if (!isMobile()) return;
+    // Only push if not already at the top of our stack
+    if (isExpandedPlayerActive() || isSidebarActive()) {
+      history.pushState({player: isExpandedPlayerActive(), sidebar: isSidebarActive()}, '');
+    }
+  }
+
+  // Listen for popstate
+  window.addEventListener('popstate', function(e) {
+    if (!isMobile()) return;
+    // If expanded player is open, close it
+    if (isExpandedPlayerActive()) {
+      expandedPlayer.classList.remove('active');
+      return;
+    }
+    // If sidebar is open, close it
+    if (isSidebarActive()) {
+      sidebar.classList.remove('active');
+      if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+      return;
+    }
+    // Otherwise, let default back behavior happen
+  });
+
+  // Whenever expanded player or sidebar is opened, push a new state
+  function observeClassChange(element, className, callback) {
+    var observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.attributeName === 'class') {
+          callback(element.classList.contains(className));
+        }
+      });
+    });
+    observer.observe(element, { attributes: true });
+  }
+
+  if (expandedPlayer) {
+    observeClassChange(expandedPlayer, 'active', function(active) {
+      if (active) pushStateIfNeeded();
+    });
+  }
+  if (sidebar) {
+    observeClassChange(sidebar, 'active', function(active) {
+      if (active) pushStateIfNeeded();
+    });
+  }
+})();
+
+// Debounce utility
+function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+
+// Attach debounced search input handler
+const searchInput = document.getElementById('global-search');
+if (searchInput) {
+    const playerInstance = window.playerInstance || null;
+    const searchHandler = (e) => {
+        if (playerInstance && typeof playerInstance.performSearch === 'function') {
+            playerInstance.performSearch(e.target.value);
+        }
+    };
+    searchInput.addEventListener('input', debounce(searchHandler, 150));
+}
+
+// Patch all touch/scroll event listeners to use passive: true
+(function patchPassiveEvents(){
+    const origAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type, listener, options) {
+        if ((type === 'touchstart' || type === 'touchmove' || type === 'touchend' || type === 'scroll') && typeof options !== 'object') {
+            options = { passive: true };
+        } else if ((type === 'touchstart' || type === 'touchmove' || type === 'touchend' || type === 'scroll') && options && typeof options === 'object' && options.passive === undefined) {
+            options = Object.assign({}, options, { passive: true });
+        }
+        return origAddEventListener.call(this, type, listener, options);
+    };
+})();

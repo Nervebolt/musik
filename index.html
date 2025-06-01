@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Sai Musik</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> <!-- Added JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script> <!-- Added JSZip -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#007aff">
@@ -69,7 +69,7 @@
 
         <div id="player-bar">
             <div class="player-song-info">
-            <div class="album-cover"><img id="album-art" src="default.png" alt="Album Cover"></div>
+            <div class="album-cover"><img id="album-art" src="default.png" alt="Album Cover" loading="lazy"></div>
             <div class="song-details">
                 <div class="song-title" id="song-title">Not Playing</div>
                 <div class="artist-name" id="artist-name">Select a song</div>
@@ -121,7 +121,7 @@
     <div id="player-container" style="display: none;">
     </div>
 
-    <script src="scripts.js"></script>
+    <script src="scripts.js" defer></script>
     <!-- Add to Playlist Modal HTML -->
     <div id="add-to-playlist-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
@@ -188,7 +188,7 @@
     <!-- Expanded Player View -->
     <div id="expanded-player" class="expanded-player">
         <button class="close-btn" id="close-expanded-player"><i class="fas fa-times"></i></button>
-        <div class="album-cover"><img id="expanded-album-art" class="album-art-large" src="default.png" alt="Album Cover"></div>
+        <div class="album-cover"><img id="expanded-album-art" class="album-art-large" src="default.png" alt="Album Cover" loading="lazy"></div>
         <div class="song-info">
             <div id="expanded-song-title" class="song-title">Not Playing</div>
             <div id="expanded-artist-name" class="artist-name">Select a song</div>
@@ -221,5 +221,36 @@
             .catch(err => console.error('😱 Service Worker registration failed:', err));
         }
     </script>
+    <script>
+        // Prevent screen from turning off using the Wake Lock API
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Wake Lock was released');
+                    });
+                    console.log('Wake Lock is active');
+                }
+            } catch (err) {
+                console.error('Wake Lock request failed:', err);
+            }
+        }
+        // Request wake lock on page load and on user interaction (for iOS/Android reliability)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                requestWakeLock();
+            } else if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        });
+        window.addEventListener('focus', requestWakeLock);
+        window.addEventListener('click', requestWakeLock, { once: true });
+        requestWakeLock();
+    </script>
+
+    <div id="queue-notification-bar" style="display:none;position:fixed;left:0;right:0;bottom:100px;z-index:2000;text-align:center;"></div>
 </body>
 </html>

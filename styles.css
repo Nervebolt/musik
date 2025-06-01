@@ -2905,13 +2905,14 @@ body:has(.expanded-player.active) .sidebar-toggle {
     #party-btn {
         display: none !important;
     }
+
     .expanded-player .song-title {
         font-size: 24px;
-      }
+    }
     
       .expanded-player .artist-name {
         font-size: 18px;
-      }
+    }
 }
 
 @media (max-width: 380px) {
@@ -2943,6 +2944,67 @@ body:has(.expanded-player.active) .sidebar-toggle {
         margin-right: auto;
     }
     /* ... existing code ... */
+}
+
+#queue-notification-bar {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 100px;
+    z-index: 2000;
+    text-align: center;
+    pointer-events: none;
+    font-size: 1.1rem;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    padding: 14px 30px;
+    border-radius: 16px;
+    margin: 0 auto;
+    max-width: 350px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: opacity 0.3s;
+    opacity: 0;
+}
+#queue-notification-bar.visible {
+    display: block;
+    opacity: 1;
+}
+@media (max-width: 600px) {
+    #queue-notification-bar {
+        max-width: 90vw;
+        font-size: 1rem;
+        padding: 10px 10vw;
+        bottom: 80px;
+        transform: translateY(-40px);
+    }
+}
+
+.album-cover img, .play-pause, .progress-bar, .modal-content, .music-card {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+}
+
+.modal-overlay {
+    display: none;
+}
+
+.modal-overlay.modal-visible {
+    display: flex;
+}
+
+.expanded-player .album-cover {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+.expanded-player .album-art-large {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 
