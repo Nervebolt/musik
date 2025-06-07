@@ -1,3 +1,102 @@
+// File Handler API for opening audio files directly with the PWA
+if ('launchQueue' in window && 'files' in LaunchParams.prototype) {
+    launchQueue.setConsumer(async (launchParams) => {
+        if (!launchParams.files.length) {
+            return;
+        }
+        
+        // Handle the files that were opened with the app
+        for (const fileHandle of launchParams.files) {
+            try {
+                // Get the File object from the FileSystemFileHandle
+                const file = await fileHandle.getFile();
+                
+                // Process the audio file
+                await processAudioFile(file);
+            } catch (error) {
+                console.error('Error handling launched file:', error);
+            }
+        }
+    });
+}
+
+// Function to process audio files (both from file input and from file handler)
+async function processAudioFile(file) {
+    // Check if it's an audio file
+    if (!file.type.startsWith('audio/')) {
+        console.warn('Not an audio file:', file.name);
+        return;
+    }
+    
+    try {
+        // Create a blob URL for the file
+        const blobUrl = URL.createObjectURL(file);
+        
+        // Extract metadata using jsmediatags
+        jsmediatags.read(file, {
+            onSuccess: async function(tag) {
+                const tags = tag.tags || {};
+                
+                // Create track data object
+                const trackData = {
+                    title: tags.title || file.name.replace(/\.[^/.]+$/, ""),
+                    artist: tags.artist || "Unknown Artist",
+                    album: tags.album || "Unknown Album",
+                    year: tags.year || "",
+                    genre: tags.genre || "",
+                    src: blobUrl,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileSize: file.size,
+                    dateAdded: new Date().toISOString(),
+                    liked: false,
+                    playCount: 0
+                };
+                
+                // Save track to IndexedDB
+                const trackId = await saveTrackToDB(trackData);
+                
+                // Refresh the UI to show the new track
+                // This depends on your app's implementation
+                if (typeof refreshPlaylist === 'function') {
+                    refreshPlaylist();
+                }
+                
+                // Optionally, play the track immediately
+                // This depends on your app's implementation
+                if (typeof playTrack === 'function') {
+                    playTrack(trackId);
+                }
+            },
+            onError: function(error) {
+                console.error('Error reading tags:', error.info);
+                // Still save the track but with minimal info
+                const trackData = {
+                    title: file.name.replace(/\.[^/.]+$/, ""),
+                    artist: "Unknown Artist",
+                    album: "Unknown Album",
+                    src: blobUrl,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileSize: file.size,
+                    dateAdded: new Date().toISOString(),
+                    liked: false,
+                    playCount: 0
+                };
+                
+                saveTrackToDB(trackData).then(trackId => {
+                    // Refresh UI
+                    if (typeof refreshPlaylist === 'function') {
+                        refreshPlaylist();
+                    }
+                });
+            }
+        });
+    } catch (error) {
+        console.error('Error processing audio file:', error);
+    }
+}
+
 // ... IndexedDB Helper Functions (can be outside the class or static members of a utility class)
 let dbPromise = null;
 
@@ -237,6 +336,13 @@ class MusicPlayer {
         this.customPlaylists = []; // To store loaded custom playlists {id, name, trackIds: []}
         this.isVolumeSliderVisible = false; // For new vertical volume slider
         this.playQueue = []; // For swipe-to-queue
+        this.selectedTracks = new Set(); // For bulk song selection
+        this.selectionModeActive = false; // Track if selection mode is on
+        this.inactivityTimer = null;
+        this.inactivityDelay = 60000; // 60 seconds (1 minute)
+        this.currentMainView = 'cards-view'; // 'cards-view' or 'list-view'
+        this.aiHasRunOnce = false; // AI state flag
+        this.lastAIProcessedSongCount = 0; // Tracks song count when AI last ran
 
         // DOM
         this.playPauseBtn = document.getElementById('play-pause-btn');
@@ -270,6 +376,7 @@ class MusicPlayer {
         this.filesPickerInput = document.getElementById('filesPicker');
         this.trueFolderPickerInput = document.getElementById('trueFolderPicker');
         this.createPlaylistBtn = document.getElementById('create-playlist-btn'); // Re-ensure it is here
+        // this.generateAIPlaylistsBtn = document.getElementById('generate-ai-playlists-btn'); // Removed AI button
 
         // Modal DOM elements
         this.addToPlaylistModal = document.getElementById('add-to-playlist-modal');
@@ -306,6 +413,18 @@ class MusicPlayer {
         this.loaderModalMessageEl = document.getElementById('loader-modal-message');
         this.loaderProgressBarEl = document.getElementById('loader-progress-bar');
         this.loaderProgressTextEl = document.getElementById('loader-progress-text');
+
+        // New "Add Songs to Playlist" Modal DOM elements
+        this.addSongsToPlaylistModal = document.getElementById('add-songs-to-playlist-modal');
+        this.addSongsModalSearchInput = document.getElementById('add-songs-modal-search');
+        this.addSongsModalSongsList = document.getElementById('add-songs-modal-songs-list');
+        this.addSongsModalAddSelectedBtn = document.getElementById('add-songs-modal-add-selected-btn');
+        this.addSongsModalCancelBtn = document.getElementById('add-songs-modal-cancel-btn');
+        this.addSongsModalCountEl = document.getElementById('add-songs-modal-count');
+
+        this.currentCustomPlaylistIdForAddSongs = null; // To store which playlist we're adding to
+        this.selectedSongsForAdding = new Set(); // To store selected song IDs
+        this.addSongsModalEventListenersSetup = false; // Flag to ensure listeners are setup once
 
         this.draggedItemIndex = null; 
         this.touchDragState = {
@@ -350,8 +469,13 @@ class MusicPlayer {
     async init() { 
         this.initAudioContext();
         this.setupEventListeners();
+        this.setupInactivityDetection(); // New: Setup inactivity detection
         this.collapsibleGroupStates = JSON.parse(localStorage.getItem('collapsibleGroupStates')) || {}; // Load folder collapse states
         
+        // Load AI state from localStorage
+        this.aiHasRunOnce = localStorage.getItem('aiHasRunOnce') === 'true';
+        this.lastAIProcessedSongCount = parseInt(localStorage.getItem('lastAIProcessedSongCount') || '0', 10);
+
         try {
             await openMusicDB(); 
             await this.loadCustomPlaylistsFromDB(); // Load custom playlists
@@ -868,6 +992,10 @@ class MusicPlayer {
             appContainer.classList.remove('sidebar-hidden');
             // Store the state
             localStorage.setItem('sidebarHidden', 'false');
+            if (window.isMobile() && sidebar.classList.contains('active')) {
+                // Push history state when sidebar is actively opened on mobile
+                history.pushState({ view: 'sidebar' }, '', '#sidebar');
+            }
         });
 
         // On page load, only hide sidebar on mobile devices
@@ -878,6 +1006,30 @@ class MusicPlayer {
             appContainer.classList.remove('sidebar-hidden');
             localStorage.setItem('sidebarHidden', 'false');
         }
+    }
+
+    setupInactivityDetection() {
+        const resetAndRestart = () => {
+            clearTimeout(this.inactivityTimer);
+            this.inactivityTimer = setTimeout(() => {
+                // Only auto-toggle if the expanded player is NOT already active
+                if (!this.expandedPlayer.classList.contains('active')) {
+                    this.expandedPlayer.classList.add('active');
+                    this.updateExpandedPlayerState();
+                    // No need to explicitly push history here, the click listener will do it.
+                }
+                // This timer is for triggering the *inactivity action*, not for continuous monitoring
+                // So, it doesn't restart itself if the action is performed.
+            }, this.inactivityDelay);
+        };
+
+        // Initial setup of the timer
+        resetAndRestart();
+
+        // Event listeners to reset the timer on user activity
+        document.addEventListener('mousemove', resetAndRestart);
+        document.addEventListener('keydown', resetAndRestart);
+        document.addEventListener('touchstart', resetAndRestart);
     }
 
     handleKeyPress(e) {
@@ -1382,6 +1534,25 @@ class MusicPlayer {
                 }
             }
             this.openNotificationModal(`${newTracksSavedToDBCount} new track(s) added successfully.`, "Success");
+
+            // New AI Trigger Logic: Only run if sufficient songs AND (first run ever OR new songs added)
+            if (this.playlist.length >= 10) {
+                const currentTotalSongs = this.playlist.length;
+                if (!this.aiHasRunOnce || currentTotalSongs > this.lastAIProcessedSongCount) {
+                    // It's the first time AI is run OR new songs have been added since last run
+                    if (this.aiPlaylistGenerator) { // Ensure generator is initialized
+                        this.aiPlaylistGenerator.generateMoodPlaylists();
+                        this.aiHasRunOnce = true;
+                        this.lastAIProcessedSongCount = currentTotalSongs;
+                        localStorage.setItem('aiHasRunOnce', 'true');
+                        localStorage.setItem('lastAIProcessedSongCount', currentTotalSongs.toString());
+                    } else {
+                        console.error("AIPlaylistGenerator not initialized on music add.");
+                    }
+                } else {
+                    console.log("AI playlist generation skipped: No new songs added or already processed for this song count.");
+                }
+            }
         } else if (newTracksToProcess.length > 0 && newTracksSavedToDBCount === 0) {
                 this.openNotificationModal("No new tracks were added. They might be duplicates, or there were errors saving them.", "Info");
         }
@@ -1727,6 +1898,11 @@ class MusicPlayer {
         const cardsView = document.getElementById('cards-view');
         cardsView.innerHTML = '';
 
+        // Animate main content entry
+        cardsView.classList.remove('main-content-fade-in'); // Reset animation
+        void cardsView.offsetWidth; // Trigger reflow
+        cardsView.classList.add('main-content-fade-in');
+
         // Check for empty state
         if (!this.playlist || this.playlist.length === 0) {
             cardsView.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Load some music or create a playlist!</div>';
@@ -1800,6 +1976,9 @@ class MusicPlayer {
 
         // Regular music cards (grouped by folders)
         this.renderRegularMusicCards(cardsView);
+
+        // Set the current view (for mobile back button logic)
+        this.currentMainView = 'cards-view';
     }
 
     createSpecialPlaylistCard(title, subtitle, coverUrl, id, icon, tracks, customPlaylist = null) {
@@ -1835,15 +2014,15 @@ class MusicPlayer {
                     <div class="list-view-subtitle">${tracks.length} songs</div>
                     <div class="list-view-actions">
                         <button class="list-view-action-btn play-all-btn">
-                            <i class="fas fa-play"></i> Play All
+                            <i class="fas fa-play"></i> Play
                         </button>
                         <button class="list-view-action-btn shuffle-btn">
-                            <i class="fas fa-random"></i> Shuffle
+                            <i class="fas fa-random"></i> Mix
                         </button>
-                        ${customPlaylist ? '<button class="list-view-action-btn delete-playlist-btn"><i class="fas fa-trash"></i> Delete Playlist</button>' : ''}
                         <button class="list-view-action-btn back-btn">
                             <i class="fas fa-arrow-left"></i> Back
                         </button>
+                        ${customPlaylist ? '<button class="list-view-action-btn delete-playlist-btn"><i class="fas fa-trash"></i> </button>' : ''}
                     </div>
                 </div>
             </div>
@@ -1858,6 +2037,21 @@ class MusicPlayer {
             const trackElement = this.createListViewTrack(track, index, playlistId, tracks, customPlaylist);
             tracksContainer.appendChild(trackElement);
         });
+
+        // Add "Add more songs" placeholder for custom playlists
+        if (customPlaylist) {
+            const addMoreSongsPlaceholder = document.createElement('div');
+            addMoreSongsPlaceholder.className = 'add-more-songs-placeholder';
+            addMoreSongsPlaceholder.innerHTML = `
+                <i class="fas fa-plus-circle"></i>
+                <span>Add more songs</span>
+            `;
+            tracksContainer.appendChild(addMoreSongsPlaceholder);
+
+            addMoreSongsPlaceholder.addEventListener('click', () => {
+                this.openAddSongsToPlaylistModal(customPlaylist.id);
+            });
+        }
 
         // Event listeners
         listView.querySelector('.play-all-btn').addEventListener('click', () => {
@@ -1892,11 +2086,28 @@ class MusicPlayer {
         }
 
         listView.querySelector('.back-btn').addEventListener('click', () => {
-            this.renderPlaylist();
+            // Add fade-out class to current list view
+            listView.classList.add('fading-out');
+            // After animation, render main playlist view
+            setTimeout(() => {
+                this.renderPlaylist();
+            }, 400); // Match CSS transition duration
         });
 
         cardsView.innerHTML = '';
         cardsView.appendChild(listView);
+
+        // Animate the list view entry
+        listView.classList.add('entering');
+        setTimeout(() => {
+            listView.classList.remove('entering');
+        }, 10); // A small delay to ensure the class is applied before removal
+
+        // Set the current view and push history state for mobile back button
+        this.currentMainView = 'list-view';
+        if (window.isMobile && window.isMobile()) {
+            history.pushState({ view: 'playlist-detail' }, '', '#playlist-detail');
+        }
     }
 
     createListViewTrack(track, index, contextPlaylistId, contextTracksArray, customPlaylistContext = null) {
@@ -2895,6 +3106,11 @@ class MusicPlayer {
 
         const trimmedPlaylistName = playlistName.trim();
 
+        if (trimmedPlaylistName.length > 17) {
+            this.openNotificationModal(`Playlist name "${trimmedPlaylistName}" is too long. Please keep it to 17 characters or less.`, "Input Error");
+            return Promise.reject("Playlist name too long");
+        }
+
         const existingPlaylist = this.customPlaylists.find(
             cp => cp.name.toLowerCase() === trimmedPlaylistName.toLowerCase()
         );
@@ -2922,7 +3138,7 @@ class MusicPlayer {
                     this.collapsibleGroupStates[`__CUSTOM_${newPlaylist.id}__`] = false;
                     this.renderPlaylist();
                     // alert(`Playlist "${newPlaylist.name}" created!`);
-                    this.openNotificationModal(`Playlist "${newPlaylist.name}" created!`, "Success");
+                    this.showQueueNotificationBar(`Playlist "${newPlaylist.name}" created!`); // Changed to queue notification
                     resolve(newPlaylist); 
                 };
                 request.onerror = (e) => {
@@ -3081,7 +3297,7 @@ class MusicPlayer {
                 console.log(`Track ${trackId} added to custom playlist ${customPlaylist.name} (ID: ${customPlaylist.id}) in DB.`);
                 const trackObj = this.playlist.find(t => t.id === trackId);
                 // alert(`'${this.truncateText(trackObj?.title || 'Song', 30)}' added to "${customPlaylist.name}".`);
-                this.openNotificationModal(`'${this.truncateText(trackObj?.title || 'Song', 30)}' added to "${customPlaylist.name}".`, "Success");
+                this.showQueueNotificationBar(`'${this.truncateText(trackObj?.title || 'Song', 30)}' added to "${customPlaylist.name}".`); // Changed to queue notification
                 this.renderPlaylist(); // Re-render to update track counts etc.
                 // No need to close modal here, calling function will do it.
             };
@@ -3123,7 +3339,7 @@ class MusicPlayer {
 
             this.renderPlaylist();
             // alert(`Playlist "${playlistName}" deleted successfully.`);
-            this.openNotificationModal(`Playlist "${playlistName}" deleted successfully.`, "Success");
+            this.showQueueNotificationBar(`Playlist "${playlistName}" deleted successfully.`); // Changed to queue notification
         } catch (error) {
             console.error("Failed to delete custom playlist:", playlistId, error);
             // alert(`Error deleting playlist "${playlistName}". Please try again.`);
@@ -3159,7 +3375,7 @@ class MusicPlayer {
                 console.log(`Track ${trackId} removed from custom playlist ${customPlaylist.name} (ID: ${customPlaylist.id}) in DB.`);
                 const trackObj = this.playlist.find(t => t.id === trackId);
                 // alert(`'${this.truncateText(trackObj?.title || 'Song', 30)}' removed from "${customPlaylist.name}".`);
-                this.openNotificationModal(`'${this.truncateText(trackObj?.title || 'Song', 30)}' removed from "${customPlaylist.name}".`, "Success");
+                this.showQueueNotificationBar(`'${this.truncateText(trackObj?.title || 'Song', 30)}' removed from "${customPlaylist.name}".`); // Changed to queue notification
                 this.renderPlaylist(); // Re-render to update track counts in main playlist view
             };
             request.onerror = (e) => {
@@ -3309,7 +3525,7 @@ class MusicPlayer {
 
             this.savePlaybackState(); // Save potentially changed currentTrack index
             this.renderPlaylist();    // Re-render UI
-            this.openNotificationModal(`Track "${this.truncateText(trackTitle, 50)}" deleted.`, "Success");
+            this.showQueueNotificationBar(`Track "${this.truncateText(trackTitle, 50)}" deleted.`); // Changed to queue notification
 
         } catch (error) {
             console.error("Failed to delete track:", trackId, error);
@@ -3469,7 +3685,7 @@ class MusicPlayer {
             this.savePlaybackState();
             this.renderPlaylist();
             // this.updateActivePlaylistItem(); // renderPlaylist calls this now
-            this.openNotificationModal(`Folder group "${this.truncateText(groupName, 50)}" and its ${trackIdsToDelete.length} track(s) deleted.`, "Success");
+            this.showQueueNotificationBar(`Folder group "${this.truncateText(groupName, 50)}" and its ${trackIdsToDelete.length} track(s) deleted.`); // Changed to queue notification
 
         } catch (error) {
             console.error(`Failed to delete folder group "${groupName}":`, error);
@@ -3946,6 +4162,286 @@ class MusicPlayer {
             });
         }
     }
+
+    async addSelectedSongsToCustomPlaylist() {
+        if (this.selectedSongsForAdding.size === 0 || this.currentCustomPlaylistIdForAddSongs === null) {
+            this.openNotificationModal("No songs selected or playlist not identified.", "Info");
+            return;
+        }
+
+        const customPlaylistId = this.currentCustomPlaylistIdForAddSongs;
+        const customPlaylist = this.customPlaylists.find(cp => cp.id === customPlaylistId);
+
+        if (!customPlaylist) {
+            console.error("Custom playlist not found for adding songs:", customPlaylistId);
+            this.openNotificationModal("Error: Custom playlist not found.", "Error");
+            return;
+        }
+
+        let songsAddedCount = 0;
+        const tracksAlreadyInPlaylist = new Set(customPlaylist.trackIds || []);
+
+        // Show a temporary loader while processing multiple adds
+        this.showLoaderModal(`Adding songs to "${this.truncateText(customPlaylist.name, 25)}"...`, this.selectedSongsForAdding.size);
+        let processedCount = 0;
+
+        // Convert Set to Array to iterate and update progress
+        const tracksToProcess = Array.from(this.selectedSongsForAdding);
+
+        for (const trackId of tracksToProcess) {
+            if (!tracksAlreadyInPlaylist.has(trackId)) {
+                try {
+                    await this.addTrackToCustomPlaylistInternal(trackId, customPlaylistId);
+                    songsAddedCount++;
+                } catch (error) {
+                    console.error(`Failed to add track ${trackId} to playlist ${customPlaylistId}:`, error);
+                    // Error message for individual track handled by addTrackToCustomPlaylistInternal if it throws a specific message
+                    // For now, just log and continue, overall notification will summarize.
+                }
+            }
+            processedCount++;
+            this.updateLoaderModal(`Added ${processedCount} of ${tracksToProcess.length} songs...`, processedCount, tracksToProcess.length);
+        }
+        
+        this.hideLoaderModal();
+
+        if (songsAddedCount > 0) {
+            this.showQueueNotificationBar(`${songsAddedCount} song(s) added to "${this.truncateText(customPlaylist.name, 25)}".`);
+            this.renderPlaylist();
+            this.populateAddSongsModalList(this.addSongsModalSearchInput?.value || ''); // Re-populate to reflect changes
+            this.selectedSongsForAdding.clear();
+            this.updateAddSongsModalSelectedCount();
+        } else {
+            this.openNotificationModal("No new songs were added (they might already be in the playlist).", "Info");
+        }
+    }
+
+    // New internal helper for adding a single track (called by both single add and multi-add)
+    async addTrackToCustomPlaylistInternal(trackId, customPlaylistId) {
+        const playlistIndex = this.customPlaylists.findIndex(cp => cp.id === customPlaylistId);
+        if (playlistIndex === -1) {
+            throw new Error("Custom playlist not found in memory.");
+        }
+
+        const customPlaylist = this.customPlaylists[playlistIndex];
+        if (!customPlaylist.trackIds) {
+            customPlaylist.trackIds = [];
+        }
+
+        if (customPlaylist.trackIds.includes(trackId)) {
+            // Do not throw error here, as addSelectedSongsToCustomPlaylist filters already
+            return; // Simply return if already in playlist
+        }
+
+        customPlaylist.trackIds.push(trackId);
+
+        try {
+            const db = await openMusicDB();
+            const transaction = db.transaction('customPlaylistsStore', 'readwrite');
+            const store = transaction.objectStore('customPlaylistsStore');
+            const request = store.put(customPlaylist);
+
+            return new Promise((resolve, reject) => {
+                request.onsuccess = () => resolve();
+                request.onerror = (e) => {
+                    customPlaylist.trackIds.pop(); // Revert optimistic update
+                    reject(e.target.error);
+                };
+            });
+        } catch (error) {
+            customPlaylist.trackIds.pop();
+            throw error;
+        }
+    }
+
+    // New internal helper for removing a single track
+    async removeTrackFromCustomPlaylistInternal(trackId, customPlaylistId) {
+        const playlistIndex = this.customPlaylists.findIndex(cp => cp.id === customPlaylistId);
+        if (playlistIndex === -1) {
+            throw new Error("Custom playlist not found in memory.");
+        }
+
+        const customPlaylist = this.customPlaylists[playlistIndex];
+        const initialLength = customPlaylist.trackIds ? customPlaylist.trackIds.length : 0;
+        if (!customPlaylist.trackIds || !customPlaylist.trackIds.includes(trackId)) {
+            throw new Error("This song is not in that playlist.");
+        }
+
+        customPlaylist.trackIds = customPlaylist.trackIds.filter(id => id !== trackId);
+
+        try {
+            const db = await openMusicDB();
+            const transaction = db.transaction('customPlaylistsStore', 'readwrite');
+            const store = transaction.objectStore('customPlaylistsStore');
+            const request = store.put(customPlaylist);
+
+            return new Promise((resolve, reject) => {
+                request.onsuccess = () => resolve();
+                request.onerror = (e) => {
+                    if (initialLength > customPlaylist.trackIds.length) {
+                        customPlaylist.trackIds.push(trackId); 
+                    }
+                    reject(e.target.error);
+                };
+            });
+        } catch (error) {
+            if (initialLength > customPlaylist.trackIds.length) {
+                customPlaylist.trackIds.push(trackId); 
+            }
+            throw error;
+        }
+    }
+
+    openAddSongsToPlaylistModal(customPlaylistId) {
+        this.currentCustomPlaylistIdForAddSongs = customPlaylistId;
+        this.selectedSongsForAdding.clear(); // Clear previous selections
+        
+        const customPlaylist = this.customPlaylists.find(cp => cp.id === customPlaylistId);
+        if (!customPlaylist) {
+            console.error("Custom playlist not found for adding songs:", customPlaylistId);
+            this.openNotificationModal("Error: Custom playlist not found.", "Error");
+            return;
+        }
+
+        if (this.addSongsToPlaylistModal) {
+            // Update title
+            const modalTitleEl = this.addSongsToPlaylistModal.querySelector('.modal-content h3');
+            if (modalTitleEl) {
+                modalTitleEl.textContent = `Add Songs to "${this.truncateText(customPlaylist.name, 25)}"`;
+            }
+            
+            // Populate the song list
+            this.populateAddSongsModalList();
+            
+            // Reset search input
+            if (this.addSongsModalSearchInput) {
+                this.addSongsModalSearchInput.value = '';
+            }
+            
+            // Update selected count
+            this.updateAddSongsModalSelectedCount();
+
+            // Show modal
+            this.addSongsToPlaylistModal.style.display = 'flex';
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.addSongsToPlaylistModal.classList.add('modal-visible');
+                });
+            });
+
+            // Setup event listeners for this modal (can be done once in constructor or here)
+            if (!this.addSongsModalEventListenersSetup) {
+                if (this.addSongsModalSearchInput) {
+                    // Debounce the search input for better performance
+                    this.addSongsModalSearchInput.addEventListener('input', debounce(() => {
+                        this.populateAddSongsModalList(this.addSongsModalSearchInput.value);
+                    }, 300));
+                }
+                if (this.addSongsModalAddSelectedBtn) {
+                    this.addSongsModalAddSelectedBtn.addEventListener('click', () => this.addSelectedSongsToCustomPlaylist());
+                }
+                if (this.addSongsModalCancelBtn) {
+                    this.addSongsModalCancelBtn.addEventListener('click', () => this.closeAddSongsToPlaylistModal());
+                }
+                this.addSongsModalEventListenersSetup = true;
+            }
+        }
+    }
+
+    closeAddSongsToPlaylistModal() {
+        if (this.addSongsToPlaylistModal) {
+            this.addSongsToPlaylistModal.classList.remove('modal-visible');
+            setTimeout(() => {
+                this.addSongsToPlaylistModal.style.display = 'none';
+                this.currentCustomPlaylistIdForAddSongs = null;
+                this.selectedSongsForAdding.clear();
+                if (this.addSongsModalSongsList) this.addSongsModalSongsList.innerHTML = ''; // Clear list
+            }, 300);
+        }
+    }
+
+    populateAddSongsModalList(searchQuery = '') {
+        if (!this.addSongsModalSongsList || this.currentCustomPlaylistIdForAddSongs === null) return;
+
+        this.addSongsModalSongsList.innerHTML = '';
+        const customPlaylist = this.customPlaylists.find(cp => cp.id === this.currentCustomPlaylistIdForAddSongs);
+        if (!customPlaylist) return; // Should not happen
+
+        const playlistTrackIds = new Set(customPlaylist.trackIds || []);
+        const queryLower = searchQuery.toLowerCase();
+
+        const songsToAdd = this.playlist.filter(track => 
+            !playlistTrackIds.has(track.id) && // Exclude songs already in the playlist
+            (track.title.toLowerCase().includes(queryLower) || 
+             track.artist.toLowerCase().includes(queryLower))
+        ).sort((a,b) => a.title.localeCompare(b.title)); // Sort alphabetically
+
+        if (songsToAdd.length === 0) {
+            const noSongsMsg = document.createElement('div');
+            noSongsMsg.textContent = searchQuery ? 'No matching songs not already in playlist.' : 'All songs are already in this playlist, or your library is empty.';
+            noSongsMsg.style.padding = '10px';
+            noSongsMsg.style.textAlign = 'center';
+            noSongsMsg.style.color = 'var(--text-muted)';
+            this.addSongsModalSongsList.appendChild(noSongsMsg);
+            return;
+        }
+
+        songsToAdd.forEach(track => {
+            const listItem = document.createElement('div');
+            listItem.className = 'add-songs-modal-item';
+            listItem.dataset.trackId = track.id;
+
+            const isSelected = this.selectedSongsForAdding.has(track.id);
+
+            listItem.innerHTML = `
+                <label for="add-song-checkbox-${track.id}">
+                    <img src="${track.cover || this.defaultCover}" alt="Cover">
+                    <div class="song-info">
+                        <div class="title">${this.truncateText(track.title, 30)}</div>
+                        <div class="artist">${this.truncateText(track.artist || 'Unknown Artist', 25)}</div>
+                    </div>
+                </label>
+                <input type="checkbox" id="add-song-checkbox-${track.id}" class="add-song-checkbox" ${isSelected ? 'checked' : ''}>
+            `;
+
+            if (isSelected) {
+                listItem.classList.add('is-selected');
+            } else {
+                listItem.classList.remove('is-selected');
+            }
+
+            const checkbox = listItem.querySelector('.add-song-checkbox');
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    this.selectedSongsForAdding.add(track.id);
+                    listItem.classList.add('is-selected'); // Add class when checked
+                } else {
+                    this.selectedSongsForAdding.delete(track.id);
+                    listItem.classList.remove('is-selected'); // Remove class when unchecked
+                }
+                this.updateAddSongsModalSelectedCount();
+            });
+
+            // Allow clicking anywhere on the item to toggle the checkbox
+            listItem.addEventListener('click', (e) => {
+                // Only toggle if the click wasn't directly on the checkbox itself
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change')); // Manually trigger change event
+                }
+            });
+
+            this.addSongsModalSongsList.appendChild(listItem);
+        });
+    }
+
+    updateAddSongsModalSelectedCount() {
+        if (this.addSongsModalAddSelectedBtn && this.addSongsModalCountEl) {
+            const count = this.selectedSongsForAdding.size;
+            this.addSongsModalCountEl.textContent = `${count} selected`;
+            this.addSongsModalAddSelectedBtn.disabled = count === 0; // Disable button if no songs selected
+        }
+    }
 }
 
 class Visualizer {
@@ -4213,6 +4709,11 @@ class Visualizer {
 
 window.addEventListener('load', ()=>{
     const player = new MusicPlayer();
+    window.musicPlayerInstance = player; // Make player instance globally accessible
+
+    // Initialize AIPlaylistGenerator and assign to player instance
+    player.aiPlaylistGenerator = new AIPlaylistGenerator(player); 
+
     new Visualizer(player);
     
     // Sidebar popup functionality
@@ -4272,7 +4773,7 @@ window.addEventListener('load', ()=>{
 
     const themeToggleButton = document.getElementById('theme-toggle-btn');
     
-    let currentTheme = 3; // Default to Dark Theme (index 1)
+    let currentTheme = 0; // Default to Dark Theme (index 1)
     const themes = [
         { // 0: Light Theme (Apple Music Inspired)
             '--bg-color': '#1c1c1e',
@@ -4294,43 +4795,45 @@ window.addEventListener('load', ()=>{
             '--shadow-color': 'rgba(0, 0, 0, 0.3)'
         },
         { // 1: Dark Theme (Apple Music Dark Mode Inspired) - DEFAULT
-            '--bg-color': '#1c1c1e',
-            '--primary-elements': '#2c2c2e',
-            '--secondary-elements': '#3a3a3c',
-            '--text-color': '#ffffff',
-            '--text-muted': '#8e8e93',
-            '--accent-color': '#1DB954',       /* Spotify Green */
-            '--hover-accent': '#14833b',       /* Darker Spotify green for hover */
+            '--bg-color': '#0b0c10',                  /* Deep midnight */
+            '--primary-elements': '#1f2833',          /* Steely dark blue */
+            '--secondary-elements': '#2c3e50',        /* Deep space gray-blue */
+            '--text-color': '#ffffff',                /* Crystal white */
+            '--text-muted': '#aeb6bf',                /* Classy silver-gray */
+            '--accent-color': '#9b59b6',              /* Imperial purple */
+            '--hover-accent': '#6c3483',              /* Darker royal purple */
             '--button-text': '#ffffff',
-            '--border-main': '#38383a',
-            '--border-light': '#48484a',       /* Slightly lighter border for dark mode */
+            '--border-main': '#4d5656',               /* Smooth graphite */
+            '--border-light': '#566573',              /* Elegant steel tone */
             '--border-radius-main': '8px',
             '--border-radius-small': '6px',
-            '--player-bar-bg': 'rgba(36, 36, 38, 0.85)',
-            '--sidebar-bg': '#232325',
-            '--selected-item-bg': 'rgba(29, 185, 84, 0.2)',  /* Spotify green with transparency */
-            '--selected-item-text': '#1DB954',
-            '--shadow-color': 'rgba(0, 0, 0, 0.3)'
+            '--player-bar-bg': 'rgba(25, 32, 39, 0.85)', /* Semi-transparent obsidian */
+            '--sidebar-bg': '#1a1a1d',                /* Charcoal black */
+            '--selected-item-bg': 'rgba(155, 89, 182, 0.2)', /* Purple glow */
+            '--selected-item-text': '#d2b4de',        /* Pastel lilac for contrast */
+            '--shadow-color': 'rgba(0, 0, 0, 0.5)'    /* Rich, smooth shadow */
 
         },
         { // 2: Original Synthwave (Kept for variety)
-            '--bg-color': '#0d0221',
-            '--primary-elements': '#240046',
-            '--secondary-elements': '#3c096c',
-            '--text-color': '#f0f0f0',
-            '--text-muted': '#a0a0a0',
-            '--accent-color': '#ff00e0',
-            '--hover-accent': '#c000a0',
-            '--button-text': '#e0e0e0',
-            '--border-main': '#58187A',
-            '--border-light': '#4A0F6A',
+            '--bg-color': '#0e1a1b',                          /* Deep teal-black */
+            '--primary-elements': '#162728',                 /* Dark cyan slate */
+            '--secondary-elements': '#1e3637',               /* Mid-tone teal-gray */
+            '--text-color': '#ffffff',                       /* Crisp white */
+            '--text-muted': '#9ec3c4',                       /* Faded mint */
+            '--accent-color': '#1ECBE1',                     /* Aqua pop (replaces Apple Red) */
+            '--hover-accent': '#159aa7',                     /* Muted turquoise hover */
+            '--button-text': '#ffffff',                      /* No clownery, pure white */
+            '--border-main': '#284344',                      /* Steel teal */
+            '--border-light': '#3a5c5d',                     /* Light teal-gray */
             '--border-radius-main': '8px',
             '--border-radius-small': '6px',
-            '--player-bar-bg': 'rgba(20, 2, 35, 0.85)',
-            '--sidebar-bg': '#1A022F',
-            '--selected-item-bg': 'rgba(255, 0, 224, 0.15)',
-            '--selected-item-text': '#ff00e0',
-            '--shadow-color': 'rgba(0, 0, 0, 0.4)'
+            '--player-bar-bg': 'rgba(18, 32, 33, 0.85)',     /* Smooth fade background */
+            '--sidebar-bg': '#142323',                       /* Deep sea green vibes */
+            '--selected-item-bg': 'rgba(30, 203, 225, 0.2)', /* Aqua highlight */
+            '--selected-item-text': '#1ECBE1',
+            '--shadow-color': 'rgba(0, 0, 0, 0.3)'            /* Classic soft dark shadow */
+
+
         },
         { // 3: Party Theme!
             '--bg-color': '#000000', /* Pure black background */
@@ -4406,20 +4909,15 @@ window.addEventListener('load', ()=>{
     document.querySelector('.album-cover').addEventListener('click', () => {
         expandedPlayer.classList.add('active');
         updateExpandedPlayerState();
+        if (window.isMobile()) {
+            history.pushState({ view: 'expanded-player' }, '', '#expanded-player');
+        }
     });
 
     // Close expanded player
     closeExpandedPlayerBtn.addEventListener('click', () => {
         expandedPlayer.classList.remove('active');
-        
-        // Add animation to player bar when exiting expanded view
-        const playerBar = document.getElementById('player-bar');
-        playerBar.classList.add('animate-in');
-        
-        // Remove animation class after animation completes
-        setTimeout(() => {
-            playerBar.classList.remove('animate-in');
-        }, 500);
+        // Removed animation code for player bar on expanded player close.
     });
 
     // Update expanded player state
@@ -4503,68 +5001,43 @@ window.addEventListener('load', ()=>{
   function isMobile() {
     return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
   }
+  window.isMobile = isMobile; // Expose globally
 
   // Elements
   var expandedPlayer = document.getElementById('expanded-player');
   var sidebar = document.getElementById('sidebar');
   var sidebarOverlay = document.querySelector('.sidebar-overlay');
 
-  // State stack management
-  function isExpandedPlayerActive() {
-    return expandedPlayer && expandedPlayer.classList.contains('active');
-  }
-  function isSidebarActive() {
-    return sidebar && sidebar.classList.contains('active');
-  }
-
-  // Push a new state if needed
-  function pushStateIfNeeded() {
-    if (!isMobile()) return;
-    // Only push if not already at the top of our stack
-    if (isExpandedPlayerActive() || isSidebarActive()) {
-      history.pushState({player: isExpandedPlayerActive(), sidebar: isSidebarActive()}, '');
-    }
-  }
-
   // Listen for popstate
   window.addEventListener('popstate', function(e) {
-    if (!isMobile()) return;
-    // If expanded player is open, close it
-    if (isExpandedPlayerActive()) {
+    if (!isMobile()) return; // Only for mobile
+
+    const playerInstance = window.musicPlayerInstance; // Access global instance
+    if (!playerInstance) return; // Should always be available after load
+
+    // Priority 1: If current view is playlist list view, go back to cards view (home screen)
+    if (playerInstance.currentMainView === 'list-view') {
+        playerInstance.renderPlaylist();
+        return; // Handled, prevent further popstate processing
+    }
+
+    // Priority 2: If expanded player is open, close it
+    if (expandedPlayer.classList.contains('active')) {
       expandedPlayer.classList.remove('active');
       return;
     }
-    // If sidebar is open, close it
-    if (isSidebarActive()) {
+
+    // Priority 3: If sidebar is open, close it
+    if (sidebar.classList.contains('active')) {
       sidebar.classList.remove('active');
       if (sidebarOverlay) sidebarOverlay.classList.remove('active');
       return;
     }
-    // Otherwise, let default back behavior happen
+    // If none of the above, let the browser handle its own history back (e.g., exiting app)
   });
 
-  // Whenever expanded player or sidebar is opened, push a new state
-  function observeClassChange(element, className, callback) {
-    var observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        if (mutation.attributeName === 'class') {
-          callback(element.classList.contains(className));
-        }
-      });
-    });
-    observer.observe(element, { attributes: true });
-  }
-
-  if (expandedPlayer) {
-    observeClassChange(expandedPlayer, 'active', function(active) {
-      if (active) pushStateIfNeeded();
-    });
-  }
-  if (sidebar) {
-    observeClassChange(sidebar, 'active', function(active) {
-      if (active) pushStateIfNeeded();
-    });
-  }
+  // No need for observeClassChange or pushStateIfNeeded here anymore
+  // PushState calls are handled directly where views/modals are activated.
 })();
 
 // Debounce utility

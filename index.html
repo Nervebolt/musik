@@ -12,6 +12,7 @@
     <meta name="theme-color" content="#007aff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
+    <script src="ai.js" defer></script> <!-- Added AI Playlist script -->
 </head>
 <body>
     <!-- Sidebar overlay for mobile popup -->
@@ -182,6 +183,24 @@
                 <div class="loader-progress-bar" id="loader-progress-bar"></div>
             </div>
             <p id="loader-progress-text" style="text-align: center; margin-top: 10px;">0 / 0</p>
+        </div>
+    </div>
+
+    <!-- New: Add Songs to Playlist Modal HTML -->
+    <div id="add-songs-to-playlist-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content large-modal">
+            <h3 id="add-songs-modal-title">Add Songs to Playlist</h3>
+            <div class="modal-search-container">
+                <input type="text" id="add-songs-modal-search" placeholder="Search songs..." class="modal-input-field">
+            </div>
+            <div id="add-songs-modal-songs-list" class="modal-songs-list-container">
+                <!-- Songs will be populated here by JS -->
+            </div>
+            <div class="modal-actions">
+                <span id="add-songs-modal-count" class="selected-count">0 selected</span>
+                <button id="add-songs-modal-add-selected-btn" class="modal-button" disabled>Add Selected</button>
+                <button id="add-songs-modal-cancel-btn" class="modal-button modal-button-secondary">Cancel</button>
+            </div>
         </div>
     </div>
 
