@@ -1845,6 +1845,8 @@ class MusicPlayer {
 
         // Update expanded player progress
         this.updateExpandedPlayerState();
+        // Update Media Session for notification UI
+        this.updateMediaSession();
     }
     formatTime(s){ const m=Math.floor(s/60), sec=Math.floor(s%60); return `${m}:${sec<10?'0':''}${sec}`; }
     updateVolumeIcon(){
@@ -2979,11 +2981,30 @@ class MusicPlayer {
                 this.updateProgress();
                 this.savePlaybackState();
             });
+            // Add seekto action for scrubbing
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.fastSeek && 'fastSeek' in this.audio) {
+                    this.audio.fastSeek(details.seekTime);
+                } else {
+                    this.audio.currentTime = details.seekTime;
+                }
+                this.updateProgress();
+                this.savePlaybackState();
+            });
             this.mediaSessionActionsSetup = true;
         }
-        // navigator.mediaSession.playbackState = this.isPlaying ? "playing" : "paused";
-        if(!this.isScrubbing) { // Don't update state if scrubbing, it's handled by play/pause on scrub end
-                navigator.mediaSession.playbackState = this.isPlaying ? "playing" : "paused";
+
+        // Update playback state only if not scrubbing
+        if(!this.isScrubbing) { 
+            navigator.mediaSession.playbackState = this.isPlaying ? "playing" : "paused";
+        }
+        // Update position state frequently
+        if (this.audio.duration && !isNaN(this.audio.duration)) {
+            navigator.mediaSession.setPositionState({
+                duration: this.audio.duration,
+                playbackRate: this.audio.playbackRate,
+                position: this.audio.currentTime,
+            });
         }
     }
 
@@ -4211,6 +4232,7 @@ class MusicPlayer {
             this.populateAddSongsModalList(this.addSongsModalSearchInput?.value || ''); // Re-populate to reflect changes
             this.selectedSongsForAdding.clear();
             this.updateAddSongsModalSelectedCount();
+            this.closeAddSongsToPlaylistModal(); // Close the modal after successful addition
         } else {
             this.openNotificationModal("No new songs were added (they might already be in the playlist).", "Info");
         }
@@ -5015,24 +5037,29 @@ window.addEventListener('load', ()=>{
     const playerInstance = window.musicPlayerInstance; // Access global instance
     if (!playerInstance) return; // Should always be available after load
 
-    // Priority 1: If current view is playlist list view, go back to cards view (home screen)
+    // Priority 1: If expanded player is open, close it
+    if (expandedPlayer.classList.contains('active')) {
+      expandedPlayer.classList.remove('active');
+      // Push a new state to keep the current URL and prevent further browser back
+      history.pushState(null, null, window.location.pathname);
+      return;
+    }
+
+    // Priority 2: If sidebar is open, close it
+    if (sidebar.classList.contains('active')) {
+      sidebar.classList.remove('active');
+      if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+      // Push a new state to keep the current URL and prevent further browser back
+      history.pushState(null, null, window.location.pathname);
+      return;
+    }
+
+    // Priority 3: If current view is playlist list view, go back to cards view (home screen)
     if (playerInstance.currentMainView === 'list-view') {
         playerInstance.renderPlaylist();
         return; // Handled, prevent further popstate processing
     }
 
-    // Priority 2: If expanded player is open, close it
-    if (expandedPlayer.classList.contains('active')) {
-      expandedPlayer.classList.remove('active');
-      return;
-    }
-
-    // Priority 3: If sidebar is open, close it
-    if (sidebar.classList.contains('active')) {
-      sidebar.classList.remove('active');
-      if (sidebarOverlay) sidebarOverlay.classList.remove('active');
-      return;
-    }
     // If none of the above, let the browser handle its own history back (e.g., exiting app)
   });
 

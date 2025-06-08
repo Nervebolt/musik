@@ -1808,8 +1808,8 @@ body:has(.expanded-player.active) .sidebar-toggle {
 }
 
 .expanded-player .album-art-large {
-    width: 320px; /* Slightly larger album art */
-    height: 320px;
+    width: 440px; /* Slightly larger album art */
+    height: 440px;
     border-radius: 12px; /* More rounded corners */
     box-shadow: 0 15px 60px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.05) inset; /* Deeper shadow with subtle inner border */
     margin-bottom: 35px; /* More space below */
@@ -1824,7 +1824,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
 .expanded-player .song-info {
     text-align: center;
-    margin-bottom: 35px; /* More space below */
+    margin-bottom: -10px; /* Reduced space below */
     z-index: 1;
     text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Stronger text shadow */
 }
@@ -1848,7 +1848,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
     align-items: center;
     gap: 30px; /* More space between controls */
     z-index: 1;
-    margin-top: 25px; /* More space above controls */
+    margin-top: 15px; /* Reduced space above controls */
     flex-wrap: wrap;
     justify-content: center;
     padding: 0 20px;
@@ -1907,7 +1907,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
 .expanded-player .progress-container {
     width: 85%; /* Wider progress bar */
     max-width: 650px; /* Increased max width */
-    margin: 40px 0; /* More vertical space */
+    margin: 20px 0; /* More vertical space */
     z-index: 1;
 }
 
@@ -1979,8 +1979,8 @@ body:has(.expanded-player.active) .sidebar-toggle {
 /* Adjustments for smaller mobile screens to maintain premium feel */
 @media (max-width: 480px) {
     .expanded-player .album-art-large {
-        width: 270px;
-        height: 270px;
+        width: 315px;
+        height: 315px;
         margin-bottom: 25px;
     }
 
@@ -3030,8 +3030,8 @@ body:has(.expanded-player.active) .sidebar-toggle {
     }
   
     .expanded-player .album-art-large {
-      width: 230px;
-      height: 230px;
+      width: 250px;
+      height: 250px;
     }
   
     .expanded-player .song-title {
