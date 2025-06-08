@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
     <script src="ai.js" defer></script> <!-- Added AI Playlist script -->
+    <script src="eq.js" defer></script> <!-- Added Equalizer script -->
 </head>
 <body>
     <!-- Sidebar overlay for mobile popup -->
@@ -86,6 +87,7 @@
             <div class="play-pause" id="play-pause-btn"><i class="fas fa-play"></i></div>
             <button class="control-btn" id="next-btn"><i class="fas fa-forward-step"></i></button>
             <button class="control-btn" id="loop-btn"><i class="fas fa-repeat"></i></button>
+            <button class="control-btn" id="equalizer-btn" title="Equalizer"><i class="fas fa-sliders"></i></button>
             
             <div class="volume-control-wrapper">
                 <button id="volume-btn" class="control-btn" title="Volume"><i class="fas fa-volume-high"></i></button>
@@ -200,6 +202,36 @@
                 <span id="add-songs-modal-count" class="selected-count">0 selected</span>
                 <button id="add-songs-modal-add-selected-btn" class="modal-button" disabled>Add Selected</button>
                 <button id="add-songs-modal-cancel-btn" class="modal-button modal-button-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Equalizer Modal HTML -->
+    <div id="equalizer-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content large-modal">
+            <h3 id="equalizer-modal-title">Equalizer</h3>
+            <div class="equalizer-controls">
+                <div class="equalizer-band-container" id="equalizer-band-container">
+                    <!-- Equalizer bands will be populated here by JS -->
+                </div>
+                <div class="equalizer-presets">
+                    <label for="equalizer-preset-select">Presets:</label>
+                    <select id="equalizer-preset-select">
+                        <option value="flat">Flat</option>
+                        <option value="jazz">Jazz</option>
+                        <option value="rock">Rock</option>
+                        <option value="pop">Pop</option>
+                        <option value="classical">Classical</option>
+                        <option value="electronic">Electronic</option>
+                        <option value="bass-boost">Bass Boost</option>
+                        <option value="vocal-boost">Vocal Boost</option>
+                        <option value="treble-boost">Treble Boost</option>
+                        <!-- More presets can be added here -->
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions" style="justify-content: center;">
+                <button id="equalizer-modal-close-btn" class="modal-button">Close</button>
             </div>
         </div>
     </div>

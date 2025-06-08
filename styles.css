@@ -33,6 +33,9 @@
     padding: 0;
     box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Apple-like font stack */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-focus-ring-color: transparent;
+    outline: none;
 }
 
 body {
@@ -1808,18 +1811,13 @@ body:has(.expanded-player.active) .sidebar-toggle {
 }
 
 .expanded-player .album-art-large {
-    width: 440px; /* Slightly larger album art */
-    height: 440px;
-    border-radius: 12px; /* More rounded corners */
+    width: 487px; /* Slightly larger album art */
+    height: 487px;
+    border-radius: 14px; /* More rounded corners */
     box-shadow: 0 15px 60px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.05) inset; /* Deeper shadow with subtle inner border */
-    margin-bottom: 35px; /* More space below */
+    margin-bottom: 20px; /* More space below */
     z-index: 1;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.expanded-player .album-art-large:hover {
-    transform: scale(1.02); /* Same subtle zoom */
-    box-shadow: 0 20px 80px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.1) inset; /* Deeper shadow on hover */
 }
 
 .expanded-player .song-info {
@@ -1830,15 +1828,15 @@ body:has(.expanded-player.active) .sidebar-toggle {
 }
 
 .expanded-player .song-title {
-    font-size: 32px; /* Larger title */
-    font-weight: 700; /* Bolder */
-    margin-bottom: 12px; /* More space below title */
+    font-size: 24px; /* Larger title */
+    font-weight: 600; /* Bolder */
+    margin-bottom: 0px; /* More space below title */
     text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4); /* Refined text shadow */
     letter-spacing: -0.5px; /* Tighter letter spacing */
 }
 
 .expanded-player .artist-name {
-    font-size: 20px; /* Larger artist name */
+    font-size: 17px; /* Larger artist name */
     color: rgba(255, 255, 255, 0.8); /* Slightly less opaque */
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* Refined text shadow */
 }
@@ -1848,7 +1846,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
     align-items: center;
     gap: 30px; /* More space between controls */
     z-index: 1;
-    margin-top: 15px; /* Reduced space above controls */
+    margin-top: -8px; /* Reduced space above controls */
     flex-wrap: wrap;
     justify-content: center;
     padding: 0 20px;
@@ -1979,8 +1977,8 @@ body:has(.expanded-player.active) .sidebar-toggle {
 /* Adjustments for smaller mobile screens to maintain premium feel */
 @media (max-width: 480px) {
     .expanded-player .album-art-large {
-        width: 315px;
-        height: 315px;
+        width: 325px;
+        height: 325px;
         margin-bottom: 25px;
     }
 
@@ -3510,6 +3508,175 @@ body:has(.expanded-player.active) .sidebar-toggle {
     border-color: initial;
     box-shadow: none;
     color: var(--accent-color);
+}
+
+#equalizer-btn {
+    color: var(--text-color);
+    transition: color 0.3s ease;
+}
+
+#equalizer-btn:hover {
+    color: var(--accent-color);
+}
+
+/* Add Songs to Playlist Modal specific styles */
+
+/* Equalizer Modal Styles */
+#equalizer-modal .modal-content {
+    width: 90%;
+    padding: 10px 10px 20px 10px;
+    max-width: 600px;
+}
+
+.equalizer-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 0 0 0;
+}
+
+.equalizer-band-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    height: 140px; /* Height for the vertical sliders */
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.equalizer-band {
+    display: flex;
+    flex-direction: column; /* Changed from column-reverse to put labels below sliders */
+    align-items: center;
+    width: 40px;
+}
+
+.equalizer-band input[type="range"] {
+    -webkit-appearance: none; /* Remove default styling */
+    appearance: none;
+    width: 150px; /* This will be the effective height of the vertical slider */
+    height: 10px; /* This will be the effective width of the vertical slider */
+    background: var(--secondary-elements);
+    border-radius: 5px;
+    outline: none;
+    margin-bottom: 64px; /* Removed previous margin to position label correctly */
+    transform: rotate(-90deg); /* Rotate for vertical orientation */
+    transform-origin: 50% 50%; /* Ensure rotation is centered */
+    /* Remove writing-mode as it's not consistently supported or needed with transform */
+}
+
+.equalizer-band input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: pointer;
+    border: 2px solid var(--primary-elements);
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.equalizer-band input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: pointer;
+    border: 2px solid var(--primary-elements);
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.equalizer-band label {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    text-align: center;
+    width: 100%;
+    margin-top: 5px; /* Added margin to separate label from slider */
+}
+
+.equalizer-presets {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 0px;
+    margin-bottom: 10px;
+}
+
+.equalizer-presets label {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+#equalizer-preset-select {
+    padding: 8px 12px;
+    border-radius: var(--border-radius-small);
+    border: 1px solid var(--border-main);
+    background-color: var(--primary-elements);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 1em;
+    min-width: 120px;
+}
+
+#equalizer-preset-select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+/* Responsive adjustments for Equalizer Modal */
+@media (max-width: 768px) {
+    .equalizer-band-container {
+        height: 180px; /* Adjusted height to accommodate sliders and labels */
+        gap: 5px;
+    }
+
+    .equalizer-band input[type="range"] {
+        width: 130px; /* Adjusted height for smaller screens */
+    }
+
+    .equalizer-band {
+        width: 35px;
+    }
+
+    .equalizer-presets {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #equalizer-preset-select {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    #equalizer-modal .modal-content {
+        width: 95%;
+        padding: 15px;
+    }
+
+    .equalizer-controls {
+        padding: 10px;
+    }
+
+    .equalizer-band-container {
+        height: 150px;
+        gap: 2px; /* Adjusted gap for smaller screens */
+    }
+
+    .equalizer-band input[type="range"] {
+        width: 100px; /* Adjusted height for smallest screens */
+    }
+
+    .equalizer-band {
+        width: 25px; /* Adjusted width for smaller screens to fit all bands */
+    }
+
+    .equalizer-band label {
+        font-size: 0.7em;
+    }
 }
 
 

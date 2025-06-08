@@ -271,11 +271,28 @@ function getDominantColors(imgElement) {
         const colorCounts = {};
         const colorStep = 32; // Reduce color precision for better grouping
 
+        // Helper to check if color is near white, black, or gray
+        function isIgnoredColor(r, g, b) {
+            // Near black
+            if (r < 24 && g < 24 && b < 24) return true;
+            // Near white
+            if (r > 232 && g > 232 && b > 232) return true;
+            // Low saturation (grayish)
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            if (max - min < 18) return true;
+            return false;
+        }
+
         // Sample every 4th pixel for performance
         for (let i = 0; i < imageData.length; i += 16) {
-            const r = Math.floor(imageData[i] / colorStep) * colorStep;
-            const g = Math.floor(imageData[i + 1] / colorStep) * colorStep;
-            const b = Math.floor(imageData[i + 2] / colorStep) * colorStep;
+            let r = imageData[i];
+            let g = imageData[i + 1];
+            let b = imageData[i + 2];
+            if (isIgnoredColor(r, g, b)) continue;
+            r = Math.floor(r / colorStep) * colorStep;
+            g = Math.floor(g / colorStep) * colorStep;
+            b = Math.floor(b / colorStep) * colorStep;
             const rgb = `${r},${g},${b}`;
             colorCounts[rgb] = (colorCounts[rgb] || 0) + 1;
         }
@@ -286,10 +303,9 @@ function getDominantColors(imgElement) {
             .sort((a, b) => b.count - a.count);
 
         // Get top 2 colors that are different enough
-        const dominantColors = [sortedColors[0]];
+        const dominantColors = sortedColors.length > 0 ? [sortedColors[0]] : [[0,0,0]];
         for (const color of sortedColors.slice(1)) {
             if (dominantColors.length === 2) break;
-            
             // Check if color is different enough from the first color
             const [r1, g1, b1] = dominantColors[0].color;
             const [r2, g2, b2] = color.color;
@@ -298,7 +314,6 @@ function getDominantColors(imgElement) {
                 Math.pow(g1 - g2, 2) +
                 Math.pow(b1 - b2, 2)
             );
-            
             if (colorDiff > 100) { // Minimum difference threshold
                 dominantColors.push(color);
             }
@@ -314,10 +329,11 @@ class MusicPlayer {
         this.analyser = null;
         this.gainNode = null;
         this.audioSource = null;
+        this.equalizer = null; // Add this line
         this.audio = new Audio();
         this.isPlaying = false;
         this.currentTrack = 0;
-        this.volume = 0.7;
+        this.volume = 1; // Default volume (0dB gain) - previously 0.7
         this.isLooping = false;
         this.restartedTrack = false;
         this.isShuffling = false;
@@ -462,6 +478,13 @@ class MusicPlayer {
         this.expandedDuration = document.getElementById('expanded-duration');
         this.closeExpandedPlayerBtn = document.getElementById('close-expanded-player');
 
+        // Equalizer Modal DOM elements
+        this.equalizerBtn = document.getElementById('equalizer-btn');
+        this.equalizerModal = document.getElementById('equalizer-modal');
+        this.equalizerBandContainer = document.getElementById('equalizer-band-container');
+        this.equalizerPresetSelect = document.getElementById('equalizer-preset-select');
+        this.equalizerModalCloseBtn = document.getElementById('equalizer-modal-close-btn');
+
         // Start
         this.init();
     }
@@ -499,7 +522,7 @@ class MusicPlayer {
                         console.log("Restoring playback state:", savedState);
                         this.currentTrack = savedState.currentTrack;
                         
-                        this.volume = savedState.volume !== undefined ? savedState.volume : 0.7;
+                        this.volume = savedState.volume !== undefined ? savedState.volume : 1; // Default to 1 (0dB) if no saved volume
                         // Apply initial volume using the new setVolume method
                         this.setVolume(this.volume); 
                         // if (this.gainNode) this.gainNode.gain.value = this.volume; // Handled by setVolume
@@ -554,12 +577,21 @@ class MusicPlayer {
     initAudioContext() {
         this.audioContext = new (window.AudioContext||window.webkitAudioContext)();
         this.analyser = this.audioContext.createAnalyser();
-        this.gainNode = this.audioContext.createGain();
+        this.gainNode = this.audioContext.createGain(); // This is the player's master volume gain
+
+        // Initialize the Equalizer
+        this.equalizer = new AudioEqualizer(this.audioContext);
+
+        // Connect the equalizer's output to the player's gain node, then to the analyser and destination
+        this.equalizer.gainNode.connect(this.gainNode); // Equalizer's master gain connects to player's master gain
+        this.gainNode.connect(this.analyser);
+        this.analyser.connect(this.audioContext.destination);
+
         this.analyser.fftSize = 2048;
         this.analyser.smoothingTimeConstant = 0.8;
         this.gainNode.gain.value = this.volume;
-        this.gainNode.connect(this.audioContext.destination);
-        this.analyser.connect(this.gainNode);
+
+        // this.equalizer.setMasterGain(0.8); // Set master gain on load
     }
 
     setupEventListeners() {
@@ -725,6 +757,16 @@ class MusicPlayer {
             });
         }
 
+        // Equalizer Button Click Listener
+        if (this.equalizerBtn) {
+            this.equalizerBtn.addEventListener('click', () => this.openEqualizerModal());
+        }
+
+        // Equalizer Modal Close Button Listener
+        if (this.equalizerModalCloseBtn) {
+            this.equalizerModalCloseBtn.addEventListener('click', () => this.closeEqualizerModal());
+        }
+
         this.loopBtn.addEventListener('click', ()=> { this.toggleLoop(); this.savePlaybackState(); });
         this.shuffleBtn.addEventListener('click', ()=> { this.toggleShuffle(); this.savePlaybackState(); });
         this.playerLikeBtn.addEventListener('click', () => this.handlePlayerLike()); // Listener for player like btn
@@ -841,6 +883,13 @@ class MusicPlayer {
         if (this.closeExpandedPlayerBtn) {
             this.closeExpandedPlayerBtn.addEventListener('click', () => {
                 this.expandedPlayer.classList.remove('active');
+                if (window.isMobile()) {
+                    // Only pop state if we navigated here via pushState
+                    if (history.state && history.state.view === 'expanded-player') {
+                        history.back(); // Go back to the previous state
+                    }
+                }
+                // Removed animation code for player bar on expanded player close.
             });
         }
 
@@ -1006,6 +1055,10 @@ class MusicPlayer {
             appContainer.classList.remove('sidebar-hidden');
             localStorage.setItem('sidebarHidden', 'false');
         }
+
+        document.getElementById('equalizer-btn').addEventListener('click', () => {
+            this.openEqualizerModal();
+        });
     }
 
     setupInactivityDetection() {
@@ -1667,7 +1720,8 @@ class MusicPlayer {
         if(!this.audioSource && this.audio.src){ 
             try {
             this.audioSource = this.audioContext.createMediaElementSource(this.audio);
-            this.audioSource.connect(this.analyser);
+            // Connect audio source to the equalizer instead of directly to analyser
+            this.equalizer.setSource(this.audioSource);
             } catch(e) {
                 console.error("Error creating media element source:", e);
                 if (this.audio.readyState === 0 && this.playlist[this.currentTrack]) { 
@@ -2651,13 +2705,45 @@ class MusicPlayer {
                 }
             }
 
-            this.renderPlaylist(); 
-            this.updatePlayerLikeButton(); 
+            // Update UI without resetting view
+            this.updatePlayerLikeButton();
+            
+            // Update like button in current view if it exists
+            const likeBtn = document.querySelector(`.like-btn-direct[data-track-id="${trackId}"]`);
+            if (likeBtn) {
+                likeBtn.innerHTML = `<i class="${track.liked ? 'fas' : 'far'} fa-heart"></i>`;
+                likeBtn.classList.toggle('liked', track.liked);
+            }
+            
+            // Update like button in search results if visible
+            const searchLikeBtn = document.querySelector(`.search-result-item[data-track-id="${trackId}"] .like-btn`);
+            if (searchLikeBtn) {
+                searchLikeBtn.innerHTML = `<i class="${track.liked ? 'fas' : 'far'} fa-heart"></i>`;
+                searchLikeBtn.classList.toggle('liked', track.liked);
+            }
+            
+            // Update like button in list view if visible
+            const listViewLikeBtn = document.querySelector(`.list-view-track[data-track-id="${trackId}"] .like-btn-direct`);
+            if (listViewLikeBtn) {
+                listViewLikeBtn.innerHTML = `<i class="${track.liked ? 'fas' : 'far'} fa-heart"></i>`;
+                listViewLikeBtn.classList.toggle('liked', track.liked);
+            }
+            
+            // Update like button in cards view if visible
+            const cardLikeBtn = document.querySelector(`.music-card[data-track-id="${trackId}"] .like-btn-direct`);
+            if (cardLikeBtn) {
+                cardLikeBtn.innerHTML = `<i class="${track.liked ? 'fas' : 'far'} fa-heart"></i>`;
+                cardLikeBtn.classList.toggle('liked', track.liked);
+            }
+            
+            // Only render playlist if we're in the main view
+            if (!document.querySelector('.list-view') && !document.querySelector('.search-results')) {
+                this.renderPlaylist();
+            }
         } catch (error) {
             console.error('Failed to update liked status in DB:', error);
             track.liked = !track.liked; // Revert optimistic update
-            this.renderPlaylist(); 
-            this.updatePlayerLikeButton(); 
+            this.updatePlayerLikeButton();
             this.openNotificationModal("Failed to update like status.", "Error");
         }
     }
@@ -3739,7 +3825,7 @@ class MusicPlayer {
     }
 
     setVolume(newVolume) {
-        this.volume = Math.max(0, Math.min(1, newVolume));
+        this.volume = Math.max(0, Math.min(0.65, newVolume));
         if (this.gainNode) {
             this.gainNode.gain.value = this.volume;
         }
@@ -3914,7 +4000,12 @@ class MusicPlayer {
             // Update background gradient based on album art colors
             if (this.albumArtEl.complete) {
                 getDominantColors(this.albumArtEl).then(colors => {
-                    const [color1, color2] = colors;
+                    let color1 = [40, 40, 40]; // fallback dark gray
+                    let color2 = [80, 80, 80]; // fallback slightly lighter gray
+                    if (Array.isArray(colors) && colors.length > 0) {
+                        color1 = colors[0];
+                        color2 = colors[1] || colors[0]; // Use color1 if only one color found
+                    }
                     const gradient = `linear-gradient(45deg, 
                         rgba(${color1[0]}, ${color1[1]}, ${color1[2]}, 0.95), 
                         rgba(${color2[0]}, ${color2[1]}, ${color2[2]}, 0.95))`;
@@ -4464,6 +4555,69 @@ class MusicPlayer {
             this.addSongsModalAddSelectedBtn.disabled = count === 0; // Disable button if no songs selected
         }
     }
+
+    openEqualizerModal() {
+        if (this.equalizerModal) {
+            this.equalizerModal.style.display = 'flex';
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.equalizerModal.classList.add('modal-visible');
+                });
+            });
+            this.renderEqualizerBands();
+        }
+    }
+
+    closeEqualizerModal() {
+        if (this.equalizerModal) {
+            this.equalizerModal.classList.remove('modal-visible');
+            setTimeout(() => {
+                this.equalizerModal.style.display = 'none';
+            }, 300);
+        }
+    }
+
+    renderEqualizerBands() {
+        if (!this.equalizer || !this.equalizerBandContainer) return;
+
+        this.equalizerBandContainer.innerHTML = ''; // Clear previous bands
+
+        this.equalizer.bands.forEach((band, index) => {
+            const bandEl = document.createElement('div');
+            bandEl.classList.add('equalizer-band');
+            bandEl.innerHTML = `
+                <input type="range" min="-12" max="12" value="${band.gain}" step="0.1" orient="vertical" data-band-index="${index}">
+                <label>${band.f >= 1000 ? band.f / 1000 + 'K' : band.f} Hz</label>
+            `;
+            const slider = bandEl.querySelector('input[type="range"]');
+            slider.addEventListener('input', (e) => {
+                const newGain = parseFloat(e.target.value);
+                this.equalizer.setGain(index, newGain);
+            });
+            this.equalizerBandContainer.appendChild(bandEl);
+        });
+
+        // Add event listener for preset selection
+        if (this.equalizerPresetSelect) {
+            this.equalizerPresetSelect.removeEventListener('change', this._presetChangeListener); // Remove old listener if exists
+            this._presetChangeListener = (e) => {
+                this.equalizer.applyPreset(e.target.value);
+                this.updateEqualizerUIFromPreset(); // Update slider positions
+            };
+            this.equalizerPresetSelect.addEventListener('change', this._presetChangeListener);
+        }
+    }
+
+    updateEqualizerUIFromPreset() {
+        if (!this.equalizer || !this.equalizerBandContainer) return;
+        this.equalizer.bands.forEach((band, index) => {
+            const slider = this.equalizerBandContainer.querySelector(`input[data-band-index="${index}"]`);
+            if (slider) {
+                slider.value = band.gain;
+            }
+        });
+        // this.equalizer.setMasterGain(0.8); // Set master gain on preset apply
+    }
 }
 
 class Visualizer {
@@ -4755,6 +4909,13 @@ window.addEventListener('load', ()=>{
             // Add click handlers to all navigation items in sidebar
             // to close it when an item is clicked.
             addSidebarItemClickHandlers();
+            if (window.isMobile()) {
+                history.pushState({ view: 'sidebar' }, '', '#sidebar');
+            }
+        } else {
+            if (window.isMobile() && history.state && history.state.view === 'sidebar') {
+                history.back();
+            }
         }
     }
     
@@ -4767,6 +4928,9 @@ window.addEventListener('load', ()=>{
             sidebar.classList.remove('active');
             sidebarOverlay.classList.remove('active');
             document.body.style.overflow = '';
+            if (window.isMobile() && history.state && history.state.view === 'sidebar') {
+                history.back();
+            }
         }
     });
     
@@ -4939,6 +5103,12 @@ window.addEventListener('load', ()=>{
     // Close expanded player
     closeExpandedPlayerBtn.addEventListener('click', () => {
         expandedPlayer.classList.remove('active');
+        if (window.isMobile()) {
+            // Only pop state if we navigated here via pushState
+            if (history.state && history.state.view === 'expanded-player') {
+                history.back(); // Go back to the previous state
+            }
+        }
         // Removed animation code for player bar on expanded player close.
     });
 
@@ -5014,6 +5184,28 @@ window.addEventListener('load', ()=>{
         if (expandedPlayer.classList.contains('active')) {
             updateExpandedPlayerState();
         }
+    }
+
+    // Add event listener for browser back button (for mobile expanded player and sidebar)
+    window.addEventListener('popstate', (event) => {
+        if (expandedPlayer.classList.contains('active')) {
+            expandedPlayer.classList.remove('active');
+        } else if (sidebar.classList.contains('active')) {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        // If there are other modals that use pushState, add their handling here
+    });
+
+    // Handle initial load in case user navigates directly to #expanded-player (e.g., from bookmark or refresh)
+    // This will ensure the expanded player is correctly shown if the URL hash is present.
+    // However, for typical back button behavior, we rely on popstate.
+    if (window.isMobile() && window.location.hash === '#expanded-player') {
+        expandedPlayer.classList.add('active');
+        updateExpandedPlayerState();
+    } else if (window.isMobile() && window.location.hash === '#sidebar') {
+        toggleSidebar(); // Open sidebar if hash is present
     }
 });
 
