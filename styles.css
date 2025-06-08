@@ -414,7 +414,7 @@ body {
 .play-pause {
     font-size: 1.8rem; 
     background: none; /* Transparent background */
-    border: 2px solid var(--button-text); /* Border instead of background */
+     /* Border instead of background */
     color: var(--button-text);
     cursor: pointer;
     width: 44px; 
@@ -1854,52 +1854,52 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
 .expanded-player .control-btn {
     color: rgba(255, 255, 255, 0.9); /* Slightly more prominent white */
-    font-size: 26px; /* Slightly larger icons */
+    font-size: 24px; /* Slightly larger icons */
     transition: all 0.3s ease; /* Smooth transition */
-    background: rgba(255, 255, 255, 0.08); /* More subtle background */
-    width: 55px; /* Larger button */
-    height: 55px;
-    border-radius: 50%;
+    background: none; /* Removed background */
+    width: auto; /* Allow width to adjust to content */
+    height: auto; /* Allow height to adjust to content */
+    border-radius: 0; /* Removed border-radius */
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
+    border: none; /* Removed border */
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); /* Soft outer shadow */
+    box-shadow: none; /* Removed box-shadow */
 }
 
 .expanded-player .control-btn:hover {
     color: white;
-    background: rgba(255, 255, 255, 0.15); /* Brighter background on hover */
+    background: none; /* Removed background on hover */
     transform: translateY(-3px) scale(1.05); /* Lift and grow effect */
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), 0 0 15px rgba(255, 255, 255, 0.2) inset; /* More pronounced shadow and inner glow */
+    box-shadow: none; /* Removed box-shadow on hover */
 }
 
 .expanded-player .control-btn.active {
     color: var(--accent-color); /* Use accent color for active state */
-    background: rgba(0, 122, 255, 0.2); /* Accent color background for active */
-    border-color: var(--accent-color); /* Accent border for active */
-    box-shadow: 0 0 15px var(--accent-color); /* Accent glow for active */
+    background: none; /* Removed background for active state */
+    border-color: initial; /* Removed border for active state */
+    box-shadow: none; /* Removed box-shadow for active state */
 }
 
 .expanded-player .play-pause {
     width: 70px; /* Larger play/pause button */
     height: 70px;
-    font-size: 32px; /* Larger icon */
-    background: rgba(255, 255, 255, 0.18); /* More pronounced background */
-    border-radius: 50%;
+    font-size: 55px; /* Larger icon */
+    background: none; /* Removed background */
+    border-radius: 0; /* Removed border-radius */
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); /* Stronger shadow */
+    box-shadow: none; /* Removed shadow */
 }
 
 .expanded-player .play-pause:hover {
-    background: rgba(255, 255, 255, 0.28); /* Brighter background on hover */
-    transform: translateY(-3px) scale(1.08); /* More prominent lift and grow */
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 255, 255, 0.3) inset; /* Stronger shadow and inner glow */
+    background: none; /* Removed background on hover */
+    transform: none; /* Removed transform on hover */
+    box-shadow: none; /* Removed shadow on hover */
 }
 
 .expanded-player .progress-container {
@@ -2005,7 +2005,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
     .expanded-player .play-pause {
         width: 60px;
         height: 60px;
-        font-size: 28px;
+        font-size: 45px;
     }
 
     .expanded-player .progress-container {
