@@ -428,8 +428,8 @@ body {
 }
 
 .play-pause:hover {
-    color: var(--accent-color);
-    border-color: var(--accent-color);
+    color: var(--button-text); /* Ensure no theme color on hover */
+    border-color: var(--border-main); /* Ensure no theme color on hover */
 }
 
 .progress-container {
@@ -1914,9 +1914,12 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
 .expanded-player .progress-container {
     width: 85%; /* Wider progress bar */
-    max-width: 650px; /* Increased max width */
+    max-width: 515px; /* Increased max width */
     margin: 20px 0; /* More vertical space */
     z-index: 1;
+    display: flex; /* Added flexbox */
+    flex-direction: column; /* Stack children vertically */
+    align-items: center; /* Center horizontally */
 }
 
 .expanded-player .progress-bar-container {
@@ -1927,6 +1930,8 @@ body:has(.expanded-player.active) .sidebar-toggle {
     cursor: pointer;
     position: relative;
     transition: height 0.2s ease, background 0.3s ease; /* Smooth transition */
+    width: 100%; /* Ensure it takes full width of its flex parent */
+    margin-bottom: 10px; /* Added space between progress bar and time display */
 }
 
 .expanded-player .progress-bar-container:hover {
@@ -1942,11 +1947,14 @@ body:has(.expanded-player.active) .sidebar-toggle {
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); /* Subtle glow effect for white */
 }
 
-.expanded-player .time-display {
-    color: rgba(255, 255, 255, 0.7); /* Softer white time display */
-    font-size: 15px; /* Slightly larger font */
-    margin-top: 10px; /* More space above */
+.expanded-player .time-display-wrapper {
+    width: 100%; /* Ensure it takes full width of its parent */
+    display: flex;
+    justify-content: space-between; /* Push current time to left, duration to right */
+    color: rgba(255, 255, 255, 0.7); /* Apply text color to the wrapper */
+    font-size: 15px; /* Apply font size to the wrapper */
     font-weight: 500;
+    margin-top: 5px; /* Small margin to separate from progress bar */
 }
 
 .expanded-player .volume-control-wrapper {
@@ -2012,6 +2020,14 @@ body:has(.expanded-player.active) .sidebar-toggle {
         font-size: 24px;
     }
 
+    .expanded-player .control-btn#expanded-prev-btn:hover,
+    .expanded-player .control-btn#expanded-next-btn:hover {
+        transform: none !important;
+        color: rgba(255, 255, 255, 0.9) !important; /* Revert to default non-hover color */
+        background: none !important; /* Ensure no background on hover */
+        box-shadow: none !important; /* Ensure no shadow on hover */
+    }
+
     .expanded-player .play-pause {
         width: 60px;
         height: 60px;
@@ -2024,7 +2040,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
         margin: 30px 0;
     }
 
-    .expanded-player .time-display {
+    .expanded-player .time-display-wrapper {
         font-size: 13px;
         margin-top: 6px;
     }
@@ -3686,6 +3702,16 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
     .equalizer-band label {
         font-size: 0.7em;
+    }
+}
+
+/* Laptop specific adjustments for Expanded Player */
+@media (min-width: 1024px) and (max-width: 1600px) {
+    .expanded-player #expanded-like-btn {
+        display: none; /* Hide the liked button on laptops */
+    }
+    .expanded-player #expanded-theme-toggle-btn {
+        display: none; /* Hide the theme change button on laptops */
     }
 }
 

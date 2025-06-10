@@ -1649,11 +1649,13 @@ class MusicPlayer {
         this.audio.load();
         this.audio.loop = this.isLooping;
         this.restartedTrack = false; 
+        // Reset progress bar and time display immediately for the new track
         this.progressBar.style.width='0%';
         this.currentTimeEl.textContent='0:00';
+        this.durationEl.textContent='0:00'; // Also reset duration until loaded
         
-        // this.updatePlaylistItemPlayingState(false); // Remove from old track first - OBSOLETE
-        // this.updateActivePlaylistItem(); // Explicitly update active item - OBSOLETE
+        // Update expanded player elements for new track info, which will also reset its progress visually
+        this.updateExpandedPlayerState();
 
         // Set new active states
         const newCardEl = document.querySelector(`#cards-view .music-card[data-track-id="${t.id}"]`);
@@ -1700,6 +1702,10 @@ class MusicPlayer {
                 startPlaybackIfNeeded(); // Call here too ensure play state is correct
             }, { once: true });
         } else {
+            // For normal prev/next, ensure UI updates when metadata is loaded
+            this.audio.addEventListener('loadedmetadata', () => {
+                this.updateProgress();
+            }, { once: true });
             startPlaybackIfNeeded();
         }
 
