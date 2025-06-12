@@ -5,20 +5,21 @@ class AudioEqualizer {
         this.audioContext = audioContext;
         this.source = null; // The audio source (e.g., MediaElementSourceNode)
         this.analyser = this.audioContext.createAnalyser(); // For visualization if needed
+        this.compressor = this.audioContext.createDynamicsCompressor(); // Compressor node
         this.gainNode = this.audioContext.createGain(); // Master gain
 
         // Define 10 bands for the equalizer (frequencies are typical for a 10-band EQ)
         this.bands = [
-            { f: 60, type: 'lowshelf', gain: 0, q: 1 },
-            { f: 170, type: 'peaking', gain: 0, q: 1 },
-            { f: 310, type: 'peaking', gain: 0, q: 1 },
-            { f: 600, type: 'peaking', gain: 0, q: 1 },
-            { f: 1000, type: 'peaking', gain: 0, q: 1 },
-            { f: 3000, type: 'peaking', gain: 0, q: 1 },
-            { f: 6000, type: 'peaking', gain: 0, q: 1 },
-            { f: 12000, type: 'peaking', gain: 0, q: 1 },
-            { f: 14000, type: 'peaking', gain: 0, q: 1 },
-            { f: 16000, type: 'highshelf', gain: 0, q: 1 }
+            { f: 60, type: 'lowshelf', gain: 0, q: 0.7 },
+            { f: 170, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 310, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 600, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 1000, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 3000, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 6000, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 12000, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 14000, type: 'peaking', gain: 0, q: 0.7 },
+            { f: 16000, type: 'highshelf', gain: 0, q: 0.7 }
         ];
 
         this.filters = [];
@@ -59,17 +60,20 @@ class AudioEqualizer {
             for (let i = 0; i < this.filters.length - 1; i++) {
                 this.filters[i].connect(this.filters[i + 1]);
             }
-            this.filters[this.filters.length - 1].connect(this.gainNode);
+            this.filters[this.filters.length - 1].connect(this.compressor);
         } else {
-            this.source.connect(this.gainNode);
+            this.source.connect(this.compressor);
         }
+        this.compressor.connect(this.gainNode);
         this.gainNode.connect(this.analyser);
     }
 
     setGain(bandIndex, value) {
         if (this.filters[bandIndex]) {
-            this.filters[bandIndex].gain.value = value;
-            this.bands[bandIndex].gain = value; // Update internal state
+            // Cap the gain at +5dB for individual bands
+            const cappedValue = Math.max(-15, Math.min(value, 5)); 
+            this.filters[bandIndex].gain.value = cappedValue;
+            this.bands[bandIndex].gain = cappedValue; // Update internal state
         }
     }
 
@@ -83,7 +87,7 @@ class AudioEqualizer {
     }
 
     setMasterGain(value) {
-        this.gainNode.gain.value = value;
+        this.gainNode.gain.value = Math.min(value, 1.0); // Cap the gain at 1.0 to prevent double amplification
     }
 
     // Presets
@@ -96,7 +100,7 @@ class AudioEqualizer {
                     this.setGain(index, 0);
                     // Reset Q to default if applicable, or define a default Q for flat
                     if (this.bands[index].type === 'peaking' || this.bands[index].type === 'bandpass' || this.bands[index].type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -114,7 +118,7 @@ class AudioEqualizer {
                 this.setGain(9, 7);  // 16kHz: +7dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -132,7 +136,7 @@ class AudioEqualizer {
                 this.setGain(9, 5);  // 16kHz: +5dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -150,7 +154,7 @@ class AudioEqualizer {
                 this.setGain(9, 6);  // 16kHz: +6dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -168,7 +172,7 @@ class AudioEqualizer {
                 this.setGain(9, 5);  // 16kHz: +5dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -186,7 +190,7 @@ class AudioEqualizer {
                 this.setGain(9, 8);  // 16kHz: +8dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -204,7 +208,7 @@ class AudioEqualizer {
                 this.setGain(9, 8);  // 16kHz: +8dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -222,7 +226,7 @@ class AudioEqualizer {
                 this.setGain(9, 1);  // 16kHz: +1dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -240,7 +244,7 @@ class AudioEqualizer {
                 this.setGain(9, 0);  // 16kHz: 0dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;
@@ -258,7 +262,7 @@ class AudioEqualizer {
                 this.setGain(9, 10); // 16kHz: +10dB
                 this.bands.forEach((band, index) => {
                     if (band.type === 'peaking' || band.type === 'bandpass' || band.type === 'notch') {
-                        this.setQ(index, 1);
+                        this.setQ(index, 0.7);
                     }
                 });
                 break;

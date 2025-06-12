@@ -1815,7 +1815,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
     height: 510px;
     border-radius: 14px; /* More rounded corners */
     box-shadow: 0 15px 60px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.05) inset; /* Deeper shadow with subtle inner border */
-    margin-bottom: 20px; /* More space below */
+    margin-bottom: 10px; /* More space below */
     z-index: 1;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -1846,7 +1846,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
     align-items: center;
     gap: 30px; /* More space between controls */
     z-index: 1;
-    margin-top: -16px; /* Reduced space above controls */
+    margin-top: -26px; /* Reduced space above controls */
     flex-wrap: wrap;
     justify-content: center;
     padding: 0 20px;
@@ -1854,7 +1854,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
 .expanded-player .control-btn {
     color: rgba(255, 255, 255, 0.9); /* Slightly more prominent white */
-    font-size: 24px; /* Slightly larger icons */
+    font-size: 20px; /* Slightly larger icons */
     transition: all 0.3s ease; /* Smooth transition */
     background: none; /* Removed background */
     width: auto; /* Allow width to adjust to content */
@@ -2011,7 +2011,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
     .expanded-player .controls {
         gap: 20px;
-        margin-top: 0px;
+        margin-top: -25px;
     }
 
     .expanded-player .control-btn {
@@ -3713,6 +3713,38 @@ body:has(.expanded-player.active) .sidebar-toggle {
     .expanded-player #expanded-theme-toggle-btn {
         display: none; /* Hide the theme change button on laptops */
     }
+}
+
+/* Prevent shuffle and loop buttons from expanding on hover */
+#shuffle-btn:hover,
+#loop-btn:hover {
+    transform: none;
+}
+
+.expanded-player #expanded-shuffle-btn:hover,
+.expanded-player #expanded-loop-btn:hover {
+    transform: none;
+}
+
+.expanded-player .control-btn:hover {
+    color: white;
+    background: none; /* Removed background on hover */
+    transform: translateY(-3px) scale(1.05); /* Lift and grow effect */
+    box-shadow: none; /* Removed box-shadow on hover */
+}
+
+.expanded-player #expanded-like-btn:hover,
+.expanded-player #expanded-theme-toggle-btn:hover,
+.expanded-player #expanded-prev-btn:hover,
+.expanded-player #expanded-next-btn:hover {
+    transform: none; /* Prevent transform on hover for these specific buttons */
+}
+
+.expanded-player .control-btn.active {
+    color: var(--accent-color); /* Use accent color for active state */
+    background: none; /* Removed background for active state */
+    border-color: initial; /* Removed border for active state */
+    box-shadow: none; /* Removed box-shadow for active state */
 }
 
 

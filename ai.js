@@ -71,53 +71,70 @@ class AIPlaylistGenerator {
         const moodScoresPerSong = {};
 
         this.player.playlist.forEach(song => {
-            const searchableText = `${song.title || ''} ${song.artist || ''} ${song.album || ''} ${song.genre || ''}`.toLowerCase();
+            const songTitle = (song.title || '').toLowerCase();
+            const songArtist = (song.artist || '').toLowerCase();
+            const songAlbum = (song.album || '').toLowerCase();
+            const songGenre = (song.genre || '').toLowerCase();
+
             moodScoresPerSong[song.id] = {};
 
             for (const mood of this.moods) {
                 let score = 0;
+                let negativeKeywordPresent = false; // Flag to check if any negative keyword is hit
+
                 mood.keywords.forEach(keyword => {
-                    if (searchableText.includes(keyword)) {
-                        score++;
-                    }
+                    if (songTitle.includes(keyword)) score += 3;
+                    if (songArtist.includes(keyword)) score += 2;
+                    if (songAlbum.includes(keyword)) score += 1;
+                    if (songGenre.includes(keyword)) score += 4; // Genre is often a strong indicator
                 });
 
-                // Apply negative keywords penalty
                 if (mood.negativeKeywords) {
-                    mood.negativeKeywords.forEach(negKeyword => {
-                        if (searchableText.includes(negKeyword)) {
-                            score -= 2; // Penalize more heavily for negative keywords
+                    for (const negKeyword of mood.negativeKeywords) {
+                        if (songTitle.includes(negKeyword) || songArtist.includes(negKeyword) ||
+                            songAlbum.includes(negKeyword) || songGenre.includes(negKeyword)) {
+                            negativeKeywordPresent = true;
+                            break; // Found a negative keyword, no need to check further for this mood
                         }
-                    });
+                    }
                 }
 
-                moodScoresPerSong[song.id][mood.name] = Math.max(0, score); // Ensure score doesn't go below 0
+                // If any negative keyword is present for this mood, this mood is a very poor fit.
+                // Assign a very low negative score to strongly deter classification into this mood.
+                if (negativeKeywordPresent) {
+                    moodScoresPerSong[song.id][mood.name] = -999;
+                } else {
+                    moodScoresPerSong[song.id][mood.name] = score;
+                }
             }
 
             let bestMood = null;
-            let highestScore = -1;
+            let highestScore = -Infinity; // Initialize with negative infinity to correctly find the highest score
+            let potentialMoods = []; // To collect all moods that have the highest score
 
-            // Find the mood with the highest net score
+            // Find the mood(s) with the highest score
             for (const mood of this.moods) {
                 const currentScore = moodScoresPerSong[song.id][mood.name];
                 if (currentScore > highestScore) {
                     highestScore = currentScore;
-                    bestMood = mood.name;
-                } else if (currentScore === highestScore && bestMood === null) {
-                    // If multiple moods have the same highest score, pick the first one encountered
-                    bestMood = mood.name;
+                    potentialMoods = [mood.name]; // Start a new list of potential moods
+                } else if (currentScore === highestScore) {
+                    potentialMoods.push(mood.name); // Add to existing list of potential moods
                 }
             }
 
-            // Assign the song to its best mood. Fallback to a random mood if no clear mood identified.
-            if (bestMood && highestScore > 0) {
-                if (!songsByMood[bestMood]) {
-                    songsByMood[bestMood] = [];
+            // Assign the song to its best mood.
+            // Only assign if the highest score is positive and there's a clear best mood or a reasonable tie.
+            if (highestScore > 0 && potentialMoods.length > 0) {
+                // If multiple moods have the same highest positive score, pick one randomly from them
+                const selectedMood = potentialMoods[Math.floor(Math.random() * potentialMoods.length)];
+                if (!songsByMood[selectedMood]) {
+                    songsByMood[selectedMood] = [];
                 }
-                songsByMood[bestMood].push(song);
+                songsByMood[selectedMood].push(song);
             } else {
-                // If no positive score or multiple moods with same highest score (including 0), assign to a random mood.
-                // This ensures songs with no strong indicators are still categorized.
+                // If no strong mood identified (highest score is 0 or negative),
+                // assign to a random mood to ensure all songs are processed for playlist generation purposes.
                 const randomMood = this.moods[Math.floor(Math.random() * this.moods.length)];
                 if (!songsByMood[randomMood.name]) {
                     songsByMood[randomMood.name] = [];
