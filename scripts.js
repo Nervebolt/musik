@@ -359,6 +359,7 @@ class MusicPlayer {
         this.currentMainView = 'cards-view'; // 'cards-view' or 'list-view'
         this.aiHasRunOnce = false; // AI state flag
         this.lastAIProcessedSongCount = 0; // Tracks song count when AI last ran
+        this.voiceAssistant = null; // New: Declare voice assistant property
 
         // DOM
         this.playPauseBtn = document.getElementById('play-pause-btn');
@@ -499,6 +500,10 @@ class MusicPlayer {
         this.aiHasRunOnce = localStorage.getItem('aiHasRunOnce') === 'true';
         this.lastAIProcessedSongCount = parseInt(localStorage.getItem('lastAIProcessedSongCount') || '0', 10);
 
+        // Initialize Voice Assistant
+        this.voiceAssistant = new VoiceAssistant(this);
+        this.voiceAssistant.startListening(); // Start listening automatically for wake word
+
         try {
             await openMusicDB(); 
             await this.loadCustomPlaylistsFromDB(); // Load custom playlists
@@ -583,7 +588,7 @@ class MusicPlayer {
         this.equalizer = new AudioEqualizer(this.audioContext);
 
         // Connect the equalizer's output to the player's gain node, then to the analyser and destination
-        this.equalizer.gainNode.connect(this.gainNode); // Equalizer's master gain connects to player's master gain
+        // this.equalizer.gainNode.connect(this.gainNode); // Equalizer's master gain connects to player's master gain
         this.gainNode.connect(this.analyser);
         this.analyser.connect(this.audioContext.destination);
 
@@ -1727,7 +1732,8 @@ class MusicPlayer {
             try {
             this.audioSource = this.audioContext.createMediaElementSource(this.audio);
             // Connect audio source to the equalizer instead of directly to analyser
-            this.equalizer.setSource(this.audioSource);
+            // this.equalizer.setSource(this.audioSource);
+            this.audioSource.connect(this.gainNode); // Connect directly to gainNode, bypassing equalizer
             } catch(e) {
                 console.error("Error creating media element source:", e);
                 if (this.audio.readyState === 0 && this.playlist[this.currentTrack]) { 
@@ -3831,7 +3837,7 @@ class MusicPlayer {
     }
 
     setVolume(newVolume) {
-        this.volume = Math.max(0, Math.min(0.65, newVolume));
+        this.volume = Math.max(0, Math.min(1, newVolume)); // Removed 0.65 limit
         if (this.gainNode) {
             this.gainNode.gain.value = this.volume;
         }
@@ -5298,3 +5304,198 @@ if (searchInput) {
         return origAddEventListener.call(this, type, listener, options);
     };
 })();
+
+class VoiceAssistant {
+    constructor(musicPlayer) {
+        this.musicPlayer = musicPlayer;
+        this.recognition = null;
+        this.isListening = false;
+        this.isActivated = false; // True if "hey sai" has been detected
+        this.wakeWord = "hey sai";
+        this.initRecognition();
+    }
+
+    initRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.warn('Speech Recognition API not supported in this browser.');
+            this.musicPlayer.openNotificationModal('Voice commands not supported. Your browser does not support Speech Recognition.', 'Browser Warning');
+            return;
+        }
+
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = false;
+        this.recognition.lang = 'en-US';
+
+        this.recognition.onstart = () => {
+            console.log('Voice Assistant: Listening...');
+            this.musicPlayer.showQueueNotificationBar('Voice Assistant: Listening...');
+        };
+
+        this.recognition.onresult = (event) => {
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    transcript += event.results[i][0].transcript;
+                }
+            }
+            console.log('Voice Assistant: Heard:', transcript);
+            this.processCommand(transcript.toLowerCase().trim());
+        };
+
+        this.recognition.onerror = (event) => {
+            console.error('Speech Recognition Error:', event.error);
+            this.musicPlayer.showQueueNotificationBar(`Voice Assistant Error: ${event.error}`);
+            this.isListening = false;
+            this.isActivated = false;
+            // Attempt to restart listening after a short delay, unless 'not-allowed' or 'aborted'
+            if (event.error !== 'not-allowed' && event.error !== 'aborted' && this.isListening) {
+                setTimeout(() => this.startListening(), 1000);
+            }
+        };
+
+        this.recognition.onend = () => {
+            console.log('Voice Assistant: Ended listening.');
+            if (this.isListening) { // If it was meant to be listening, restart
+                this.startListening();
+            }
+        };
+    }
+
+    startListening() {
+        if (this.recognition && !this.isListening) {
+            try {
+                this.recognition.start();
+                this.isListening = true;
+                this.isActivated = false;
+            } catch (e) {
+                console.error("Error starting speech recognition:", e);
+                this.musicPlayer.openNotificationModal('Failed to start microphone. Please ensure it is not in use by another app and you have granted permission.', 'Microphone Error');
+                this.isListening = false;
+            }
+        }
+    }
+
+    stopListening() {
+        if (this.recognition && this.isListening) {
+            this.recognition.stop(); // This will trigger onend
+            this.isListening = false; // Set this immediately
+            this.isActivated = false;
+            this.musicPlayer.showQueueNotificationBar('Voice Assistant: Inactive');
+            console.log('Voice Assistant: Stopped listening');
+        }
+    }
+
+    processCommand(command) {
+        if (!this.isActivated) {
+            // Check for wake word
+            if (command.includes(this.wakeWord)) {
+                this.isActivated = true;
+                this.musicPlayer.showQueueNotificationBar('Voice Assistant: Activated! What can I do?');
+                console.log('Voice Assistant: Activated');
+                // Could add a timer to deactivate if no command is given within a few seconds
+            } else {
+                // console.log('Voice Assistant: Not activated, ignoring:', command); // Too much noise
+            }
+        } else {
+            // Process commands
+            if (command.includes('play song')) {
+                const songQuery = command.replace('play song', '').trim();
+                this.findAndPlaySong(songQuery);
+                this.isActivated = false; // Deactivate after command
+                this.musicPlayer.showQueueNotificationBar('Voice Assistant: Command processed.');
+            } else if (command.includes('stop listening') || command.includes('shut up sai')) {
+                this.stopListening();
+            } else if (command.includes('play next')) {
+                this.musicPlayer.nextTrack();
+                this.musicPlayer.showQueueNotificationBar('Playing next track.');
+                this.isActivated = false;
+            } else if (command.includes('play previous')) {
+                this.musicPlayer.prevTrack();
+                this.musicPlayer.showQueueNotificationBar('Playing previous track.');
+                this.isActivated = false;
+            } else if (command.includes('pause')) {
+                this.musicPlayer.pause();
+                this.musicPlayer.showQueueNotificationBar('Music paused.');
+                this.isActivated = false;
+            } else if (command.includes('play music') || command.includes('resume music')) {
+                this.musicPlayer.play();
+                this.musicPlayer.showQueueNotificationBar('Music playing.');
+                this.isActivated = false;
+            }
+            else {
+                this.musicPlayer.showQueueNotificationBar('Voice Assistant: Command not recognized.');
+                console.log('Voice Assistant: Command not recognized:', command);
+            }
+        }
+    }
+
+    findAndPlaySong(query) {
+        const playlist = this.musicPlayer.playlist;
+        if (!playlist || playlist.length === 0) {
+            this.musicPlayer.openNotificationModal('Your playlist is empty. Please add songs first.', 'No Songs');
+            return;
+        }
+
+        let bestMatch = null;
+        let highestScore = -1;
+
+        const queryLower = query.toLowerCase();
+        const queryWords = queryLower.split(/\s+/).filter(Boolean);
+
+        playlist.forEach(track => {
+            let score = 0;
+            const titleLower = track.title ? track.title.toLowerCase() : '';
+            const artistLower = track.artist ? track.artist.toLowerCase() : '';
+            const albumLower = track.album ? track.album.toLowerCase() : '';
+
+            // Prioritize exact or near-exact matches first
+            if (titleLower === queryLower) {
+                score += 100; // High score for exact title match
+            } else if (artistLower === queryLower) {
+                score += 90; // High score for exact artist match
+            } else if (albumLower === queryLower) {
+                score += 80; // High score for exact album match
+            }
+
+            // Word-based scoring
+            queryWords.forEach(word => {
+                if (titleLower.includes(word)) {
+                    score += 5; // More for title match
+                }
+                if (artistLower.includes(word)) {
+                    score += 3; // Less for artist match
+                }
+                if (albumLower.includes(word)) {
+                    score += 2; // Even less for album match
+                }
+            });
+
+            // Simple "starts with" bonus
+            if (titleLower.startsWith(queryLower)) {
+                score += 10;
+            } else if (artistLower.startsWith(queryLower)) {
+                score += 8;
+            }
+
+            if (score > highestScore) {
+                highestScore = score;
+                bestMatch = track;
+            }
+        });
+
+        if (bestMatch && highestScore > 0) {
+            const trackIndex = playlist.findIndex(t => t.id === bestMatch.id);
+            if (trackIndex !== -1) {
+                this.musicPlayer.loadTrack(trackIndex);
+                this.musicPlayer.play();
+                this.musicPlayer.showQueueNotificationBar(`Playing: ${bestMatch.title} by ${bestMatch.artist}`);
+            } else {
+                this.musicPlayer.openNotificationModal(`Found "${bestMatch.title}" but could not play it.`, 'Playback Error');
+            }
+        } else {
+            this.musicPlayer.openNotificationModal(`Could not find a song matching "${query}".`, 'Song Not Found');
+        }
+    }
+}

@@ -1,6 +1,6 @@
 // sw.js - Service Worker for Sai Musik
 
-const CACHE_NAME = 'sai-musik-v4.0.93';
+const CACHE_NAME = 'sai-musik-v4.0.94';
 const ASSETS_TO_CACHE = [
   './', // root route
   './index.html',
