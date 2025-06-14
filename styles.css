@@ -90,10 +90,6 @@ body {
     user-select: none;
 }
 
-.logo:hover {
-    transform: scale(1.05);
-}
-
 .action-group-header {
     display: flex;
     flex-direction: column;
@@ -846,29 +842,29 @@ body {
 /* Custom Scrollbar Styles */
 /* Works in Webkit-based browsers (Chrome, Safari, Edge), Firefox uses different properties (scrollbar-width, scrollbar-color) */
 ::-webkit-scrollbar {
-    width: 8px; /* Width of the entire scrollbar */
-    height: 8px; /* Height for horizontal scrollbar (if any) */
+    width: 2px; /* Width of the entire scrollbar - Even thinner */
+    height: 2px; /* Height for horizontal scrollbar (if any) - Even thinner */
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--secondary-elements); /* Track color, slightly darker than sidebar */
-    border-radius: 10px;
+    background: var(--bg-color); /* Track color, using background color for subtlety */
+    border-radius: 0px; /* Made square */
 }
 
 ::-webkit-scrollbar-thumb {
-    background-color: var(--text-muted); /* Thumb color */
-    border-radius: 10px;
-    border: 2px solid var(--secondary-elements); /* Creates padding around thumb */
+    background-color: var(--accent-color); /* Thumb color - Using accent color */
+    border-radius: 0px; /* Made square */
+    border: 0px solid var(--bg-color); /* Removed border for a more integrated square look */
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background-color: var(--accent-color); /* Thumb color on hover */
+    background-color: var(--hover-accent); /* Thumb color on hover */
 }
 
 /* For Firefox */
 * {
     scrollbar-width: thin; /* "auto" or "thin" */
-    scrollbar-color: var(--text-muted) var(--secondary-elements); /* thumb and track color */
+    scrollbar-color: var(--accent-color) var(--bg-color); /* thumb and track color */
 }
 
 /* Drag and Drop Playlist Styles */
@@ -1296,7 +1292,6 @@ body {
 }
 
 .music-card:hover {
-    transform: translateY(-5px);
     box-shadow: 0 4px 12px var(--shadow-color);
 }
 
@@ -1804,18 +1799,12 @@ body:has(.expanded-player.active) .sidebar-toggle {
     transition: opacity 0.3s ease, transform 0.2s ease;
 }
 
-.expanded-player .close-btn:hover {
-    opacity: 1;
-    transform: scale(1.1); /* Subtle zoom on hover */
-    color: white; /* Full white on hover */
-}
-
 .expanded-player .album-art-large {
     width: 510px; /* Slightly larger album art */
     height: 510px;
     border-radius: 14px; /* More rounded corners */
     box-shadow: 0 15px 60px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.05) inset; /* Deeper shadow with subtle inner border */
-    margin-bottom: 10px; /* More space below */
+    margin-bottom: 7px; /* More space below */
     z-index: 1;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -1839,6 +1828,47 @@ body:has(.expanded-player.active) .sidebar-toggle {
     font-size: 17px; /* Larger artist name */
     color: rgba(255, 255, 255, 0.8); /* Slightly less opaque */
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* Refined text shadow */
+}
+
+.expanded-player .quality-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-top: -23px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.expanded-player .quality-indicator i {
+    font-size: 10px;
+}
+
+.expanded-player .quality-indicator.lossless {
+    color: rgba(255, 255, 255, 0.8); /* Soft light purple for text and icon */
+    background: rgba(255, 255, 255, 0.15); /* Muted purple with 70% opacity */
+    backdrop-filter: blur(8px); /* Apply a blur effect */
+    -webkit-backdrop-filter: blur(8px); /* For Safari support */
+    border-radius: 8px;
+    padding: 5px 15px 5px 9px; /* Adjusted padding */
+    font-size: 0.9em; /* Slightly smaller font */
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px; /* Reduced gap */
+    letter-spacing: 0.01em;
+}
+
+.expanded-player .quality-indicator.lossless i {
+    color: rgba(255, 255, 255, 0.15) !important;
+    font-size: 1.1em;
+    margin-right: 6px;
+    opacity: 0.95;
+}
+
+.expanded-player .quality-indicator.high-quality {
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .expanded-player .controls {
@@ -1941,7 +1971,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
 
 .expanded-player .progress-bar {
     height: 100%;
-    background: rgba(255, 255, 255, 0.9); /* Solid white for the progress bar */
+    background: rgba(255, 255, 255, 0.5); /* Solid white for the progress bar */
     border-radius: 4px;
     transition: width 0.1s linear;
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); /* Subtle glow effect for white */
@@ -3537,6 +3567,7 @@ body:has(.expanded-player.active) .sidebar-toggle {
 }
 
 #equalizer-btn {
+    display: none;
     color: var(--text-color);
     transition: color 0.3s ease;
 }
@@ -3745,6 +3776,14 @@ body:has(.expanded-player.active) .sidebar-toggle {
     background: none; /* Removed background for active state */
     border-color: initial; /* Removed border for active state */
     box-shadow: none; /* Removed box-shadow for active state */
+}
+
+.expanded-player .quality-indicator.lossless svg {
+    height: 1.2em; /* Adjust SVG height relative to font size */
+    width: auto; /* Maintain aspect ratio */
+    margin-right: 6px; /* Space between icon and text */
+    opacity: 0.95;
+    flex-shrink: 0;
 }
 
 

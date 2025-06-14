@@ -625,7 +625,9 @@ class MusicPlayer {
 
         // playback controls
         this.playPauseBtn.addEventListener('click', ()=>this.togglePlay());
+        this.prevBtn.innerHTML = '<i class="fas fa-backward"></i>'; // Set icon for prev button
         this.prevBtn.addEventListener('click', ()=>this.prevTrack());
+        this.nextBtn.innerHTML = '<i class="fas fa-forward"></i>'; // Set icon for next button
         this.nextBtn.addEventListener('click', ()=>this.nextTrack());
         const progressContainer = document.getElementById('progress-container'); // Get ref for new listeners
         if (progressContainer) {
@@ -898,9 +900,11 @@ class MusicPlayer {
             this.expandedPlayPauseBtn.addEventListener('click', () => this.togglePlay());
         }
         if (this.expandedPrevBtn) {
+            this.expandedPrevBtn.innerHTML = '<i class="fas fa-backward"></i>'; // Set icon for expanded prev button
             this.expandedPrevBtn.addEventListener('click', () => this.prevTrack());
         }
         if (this.expandedNextBtn) {
+            this.expandedNextBtn.innerHTML = '<i class="fas fa-forward"></i>'; // Set icon for expanded next button
             this.expandedNextBtn.addEventListener('click', () => this.nextTrack());
         }
         if (this.expandedShuffleBtn) {
@@ -4027,6 +4031,25 @@ class MusicPlayer {
         }
         if (this.expandedArtistName) {
             this.expandedArtistName.textContent = this.artistNameEl.textContent;
+        }
+
+        // Update quality indicator
+        const qualityIndicator = document.getElementById('expanded-quality-indicator');
+        if (qualityIndicator && this.playlist && this.currentTrack !== undefined && this.playlist[this.currentTrack]) {
+            const currentTrack = this.playlist[this.currentTrack];
+            if (currentTrack && currentTrack.originalFileName) {
+                const fileExtension = currentTrack.originalFileName.split('.').pop().toLowerCase();
+                
+                qualityIndicator.className = 'quality-indicator';
+                if (['flac', 'wav', 'm4a'].includes(fileExtension)) {
+                    qualityIndicator.innerHTML = '<img src="hee.png" alt="Lossless Quality" style="height: 1.4em; vertical-align: middle; margin-right: 0.25em;"> Lossless';
+                    qualityIndicator.classList.add('lossless');
+                } else {
+                    qualityIndicator.innerHTML = '';
+                }
+            } else {
+                qualityIndicator.innerHTML = '';
+            }
         }
         
         // Update play/pause button
